@@ -108,7 +108,7 @@ fn get_value_2(input: &str) -> i32 {
         (None, None) => "".to_string(),
     };
 
-    combined.parse::<i32>().ok().unwrap()
+    combined.parse::<i32>().unwrap()
 }
 
 fn get_value_1(input: &str) -> i32 {
