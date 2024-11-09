@@ -5,3 +5,7 @@
 **/*.rs.bk
 **/*.vscode/
 **/*.vs/
+**/*.pdb
+**/*.vscode/
+**/*.vs/
+**/tempCodeRunnerFile.rs
