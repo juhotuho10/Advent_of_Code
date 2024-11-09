@@ -23,7 +23,7 @@ use std::io::{BufRead, BufReader};
 #[derive(Debug, Clone)]
 struct Game {
     number: u32,
-    cubes: HashMap<Cubes, u32>,
+    num_cubes: HashMap<Cubes, u32>,
 }
 
 impl Game {
@@ -36,7 +36,7 @@ impl Game {
 
         Game {
             number: game_num,
-            cubes,
+            num_cubes: cubes,
         }
     }
 
@@ -61,8 +61,8 @@ impl Game {
                     _ => unreachable!(),
                 };
 
-                if curent_game.cubes[&cube_type] < cube_num {
-                    curent_game.cubes.insert(cube_type, cube_num);
+                if curent_game.num_cubes[&cube_type] < cube_num {
+                    curent_game.num_cubes.insert(cube_type, cube_num);
                 }
             }
         }
@@ -135,7 +135,7 @@ fn valid_games_sum_1(input: &[String]) -> u32 {
     let possible_games: Vec<&Game> = all_games
         .iter()
         .filter(|game| {
-            let game_cubes = &game.cubes;
+            let game_cubes = &game.num_cubes;
             game_cubes[&Cubes::Red] <= max_possible_cubes[&Cubes::Red]
                 && game_cubes[&Cubes::Green] <= max_possible_cubes[&Cubes::Green]
                 && game_cubes[&Cubes::Blue] <= max_possible_cubes[&Cubes::Blue]
@@ -151,7 +151,7 @@ fn multiplied_cube_sum(input: &[String]) -> u32 {
     all_games
         .iter()
         .map(|game| {
-            let game_cubes = &game.cubes;
+            let game_cubes = &game.num_cubes;
             game_cubes[&Cubes::Red] * game_cubes[&Cubes::Green] * game_cubes[&Cubes::Blue]
         })
         .sum()
