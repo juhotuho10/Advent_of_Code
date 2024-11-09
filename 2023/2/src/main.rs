@@ -39,6 +39,36 @@ impl Game {
             cubes,
         }
     }
+
+    fn from_game_string(whole_game: &str) -> Self {
+        let (game, rounds_str) = whole_game.split_once(":").unwrap();
+        let (_, game_num_str) = game.split_once(" ").unwrap();
+        let game_num = game_num_str.to_owned().parse::<u32>().unwrap();
+        let rounds: Vec<&str> = rounds_str.split(";").collect();
+
+        let mut curent_game = Game::new(game_num);
+
+        for round in rounds {
+            let cubes: Vec<&str> = round.split(",").collect();
+            for cube_str in cubes {
+                let (cube_num_str, cube_color) = cube_str.trim().split_once(" ").unwrap();
+
+                let cube_num = cube_num_str.to_owned().parse::<u32>().unwrap();
+                let cube_type = match cube_color {
+                    "red" => Cubes::Red,
+                    "green" => Cubes::Green,
+                    "blue" => Cubes::Blue,
+                    _ => unreachable!(),
+                };
+
+                if curent_game.cubes[&cube_type] < cube_num {
+                    curent_game.cubes.insert(cube_type, cube_num);
+                }
+            }
+        }
+
+        curent_game
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Hash)]
@@ -88,33 +118,7 @@ fn part_2(_my_input: &[String]) {
 fn parse_games(input: &[String]) -> Vec<Game> {
     let mut all_games: Vec<Game> = vec![];
     for whole_game in input {
-        let (game, rounds_str) = whole_game.split_once(":").unwrap();
-        let (_, game_num_str) = game.split_once(" ").unwrap();
-        let game_num = game_num_str.to_owned().parse::<u32>().unwrap();
-        let rounds: Vec<&str> = rounds_str.split(";").collect();
-
-        let mut curent_game = Game::new(game_num);
-
-        for round in rounds {
-            let cubes: Vec<&str> = round.split(",").collect();
-            for cube_str in cubes {
-                let (cube_num_str, cube_color) = cube_str.trim().split_once(" ").unwrap();
-
-                let cube_num = cube_num_str.to_owned().parse::<u32>().unwrap();
-                let cube_type = match cube_color {
-                    "red" => Cubes::Red,
-                    "green" => Cubes::Green,
-                    "blue" => Cubes::Blue,
-                    _ => unreachable!(),
-                };
-
-                if curent_game.cubes[&cube_type] < cube_num {
-                    curent_game.cubes.insert(cube_type, cube_num);
-                }
-            }
-        }
-
-        all_games.push(curent_game);
+        all_games.push(Game::from_game_string(whole_game));
     }
 
     all_games
