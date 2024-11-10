@@ -7,6 +7,5 @@
 **/*.vs/
 **/*.pdb
 **/*.vscode/
-**/*.vs/
 **/*.exe
 **/tempCodeRunnerFile.rs
