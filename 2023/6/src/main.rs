@@ -4,6 +4,9 @@ the boat races are based on how much distance you can cover in a certain time
 the distance covered is determined by how long you charge the boat, but the longer you charge, the less time you have to go forward
 get the possible count of winning combinations of charing for every race
 multiply the winning combinations for all races together
+
+part 2:
+    it's all just a single race and you have to combine the time and distance letters
 */
 
 use std::fs::File;
@@ -25,12 +28,12 @@ impl TimeDistance {
         // -m^2 * xm - Distance = 0
 
         let (min_charge_time, max_charge_time) =
-            TimeDistance::solve_quadratic(-1, self.time as i32, -(self.distance as i32)).unwrap();
+            TimeDistance::solve_quadratic(-1, self.time as i64, -(self.distance as i64)).unwrap();
 
         max_charge_time - min_charge_time - 1
     }
 
-    fn solve_quadratic(a: i32, b: i32, c: i32) -> Option<(u64, u64)> {
+    fn solve_quadratic(a: i64, b: i64, c: i64) -> Option<(u64, u64)> {
         let discriminant: f64 = (b * b - 4 * a * c) as f64;
 
         if discriminant < 0.0 {
