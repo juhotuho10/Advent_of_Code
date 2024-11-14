@@ -9,3 +9,4 @@
 **/*.vscode/
 **/*.exe
 **/tempCodeRunnerFile.rs
+**/my_input.txt

@@ -23,7 +23,7 @@ fn part_2(_my_input: &[String]) {
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
-    let file = File::open(file_name).expect("wont fail");
+    let file = File::open(file_name).expect("File not found");
     let reader = BufReader::new(file);
 
     reader.lines().map_while(Result::ok).collect()
