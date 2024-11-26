@@ -39,7 +39,7 @@ impl Valley {
         }
     }
 
-    fn get_mirror_points(&self) -> (Option<Vec<usize>>, Option<Vec<usize>>) {
+    fn get_mirror_points(&self) -> (Vec<usize>, Vec<usize>) {
         let mut row_mirros: Vec<usize> = vec![];
         let mut columns_mirrors: Vec<usize> = vec![];
 
@@ -50,7 +50,7 @@ impl Valley {
                 .filter(|(c1, c2)| c1 != c2)
                 .count();
 
-            if diff_count < 2 {
+            if diff_count <= 1 {
                 row_mirros.push(i + 1);
             }
         }
@@ -62,65 +62,43 @@ impl Valley {
                 .filter(|(c1, c2)| c1 != c2)
                 .count();
 
-            if diff_count < 2 {
+            if diff_count <= 1 {
                 columns_mirrors.push(i + 1);
             }
         }
 
-        // None if empty
-        let row_spits = (!row_mirros.is_empty()).then_some(row_mirros);
-        let col_spits = (!columns_mirrors.is_empty()).then_some(columns_mirrors);
-
-        (row_spits, col_spits)
+        (row_mirros, columns_mirrors)
     }
 
     fn get_points(&self, diff: u32) -> u32 {
         let mut points = 0;
-        let (possible_rows, possible_columns) = self.get_mirror_points();
+        let (row_locations, col_locations) = self.get_mirror_points();
 
-        if let Some(row_locations) = possible_rows {
-            for split_point in row_locations {
-                let slice = self.rows.as_slice();
-                let (left, right) = slice.split_at(split_point);
+        points += self.mirror_points(&self.rows, row_locations, diff) * 100;
 
-                let min_size = left.len().min(right.len());
-                let same_count: usize = left
-                    .iter()
-                    .rev()
-                    .zip(right.iter())
-                    .take(min_size)
-                    .map(|(l, r)| l.chars().zip(r.chars()).filter(|(lc, rc)| lc != rc).count())
-                    .sum();
-
-                if same_count == diff as usize {
-                    points += 100 * split_point;
-                    break;
-                }
-            }
-        }
-
-        if let Some(col_locations) = possible_columns {
-            for split_point in col_locations {
-                let slice = self.columns.as_slice();
-                let (left, right) = slice.split_at(split_point);
-
-                let min_size = left.len().min(right.len());
-                let same_count: usize = left
-                    .iter()
-                    .rev()
-                    .zip(right.iter())
-                    .take(min_size)
-                    .map(|(l, r)| l.chars().zip(r.chars()).filter(|(lc, rc)| lc != rc).count())
-                    .sum();
-
-                if same_count == diff as usize {
-                    points += split_point;
-                    break;
-                }
-            }
-        }
+        points += self.mirror_points(&self.columns, col_locations, diff);
 
         points as u32
+    }
+
+    fn mirror_points(&self, valley: &[String], split_points: Vec<usize>, diff: u32) -> usize {
+        for point in split_points {
+            let (left, right) = valley.split_at(point);
+
+            let min_size = left.len().min(right.len());
+            let same_count: usize = left
+                .iter()
+                .rev()
+                .zip(right.iter())
+                .take(min_size)
+                .map(|(l, r)| l.chars().zip(r.chars()).filter(|(lc, rc)| lc != rc).count())
+                .sum();
+
+            if same_count == diff as usize {
+                return point;
+            }
+        }
+        0
     }
 }
 
