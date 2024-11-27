@@ -1,0 +1,8 @@
+[package]
+edition = "2021"
+name = "Advent-of-Code"
+version = "0.1.0"
+
+[dependencies]
+indexmap = "2.6.0"
+regex = "1.11.1"
