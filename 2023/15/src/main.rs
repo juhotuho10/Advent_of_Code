@@ -27,7 +27,7 @@ enum Sign {
 }
 
 struct HashString {
-    string: String,
+    complete_string: String,
     id_string: String,
     sign: Sign,
 }
@@ -51,28 +51,15 @@ impl HashString {
         };
 
         HashString {
-            string: input.clone(),
+            complete_string: input.clone(),
             id_string,
             sign,
         }
     }
-    fn get_hash_num(&self) -> u32 {
+
+    fn get_string_hash(&self, input: &str) -> u32 {
         let mut total: u32 = 0;
-        for c in self.string.chars() {
-            assert!(c.is_ascii());
-
-            let ascii_code = c as u8;
-            total += ascii_code as u32;
-            total *= 17;
-            total %= 256;
-        }
-
-        total
-    }
-
-    fn get_label_num(&self) -> u32 {
-        let mut total: u32 = 0;
-        for c in self.id_string.chars() {
+        for c in input.chars() {
             assert!(c.is_ascii());
 
             let ascii_code = c as u8;
@@ -119,7 +106,10 @@ fn part_2(_my_input: &[String]) {
 fn get_hash_sum_1(input: &[String]) -> u32 {
     let hash_strings = parse_input(input);
 
-    hash_strings.iter().map(|s| s.get_hash_num()).sum()
+    hash_strings
+        .iter()
+        .map(|s| s.get_string_hash(&s.complete_string))
+        .sum()
 }
 
 fn get_focus_power_sum_2(input: &[String]) -> u32 {
@@ -127,7 +117,7 @@ fn get_focus_power_sum_2(input: &[String]) -> u32 {
     let mut lense_boxes: HashMap<u32, IndexMap<String, u32>> = HashMap::new();
 
     for item in &hash_strings {
-        let hash = item.get_label_num();
+        let hash = item.get_string_hash(&item.id_string);
 
         let current_box = lense_boxes.entry(hash).or_default();
 
