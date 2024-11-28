@@ -21,11 +21,15 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+enum Sign {
+    Remove,
+    Add(u32),
+}
+
 struct HashString {
     string: String,
     id_string: String,
-    sign: char,
-    num: Option<u32>,
+    sign: Sign,
 }
 
 impl HashString {
@@ -33,11 +37,23 @@ impl HashString {
         let re = Regex::new(r"([a-zA-Z]+)([=/-])(\d+)?").unwrap();
         let captures = re.captures(&input).unwrap();
 
+        let id_string = captures[1].to_string();
+        let captured_sign = captures[2].chars().next().unwrap();
+
+        let sign = match captured_sign {
+            '-' => Sign::Remove,
+            '=' => {
+                let add_number = captures[3].parse::<u32>().unwrap();
+
+                Sign::Add(add_number)
+            }
+            _ => unreachable!(),
+        };
+
         HashString {
             string: input.clone(),
-            id_string: captures[1].to_string(),
-            sign: captures[2].chars().next().unwrap(),
-            num: captures.get(3).map(|s| s.as_str().parse::<u32>().unwrap()),
+            id_string,
+            sign,
         }
     }
     fn get_hash_num(&self) -> u32 {
@@ -116,23 +132,20 @@ fn get_focus_power_sum_2(input: &[String]) -> u32 {
         let current_box = lense_boxes.entry(hash).or_default();
 
         match item.sign {
-            '=' => {
-                if let Some(lense_num) = item.num {
-                    *current_box.entry(item.id_string.clone()).or_insert(0) = lense_num;
-                }
+            Sign::Add(lense_num) => {
+                *current_box.entry(item.id_string.clone()).or_insert(0) = lense_num;
             }
-            '-' => {
+            Sign::Remove => {
                 current_box.shift_remove(&item.id_string);
             }
-            _ => unreachable!(),
         }
     }
 
     let mut total = 0;
-    for i in 0..=256 {
-        if let Some(lens_box) = lense_boxes.get(&i) {
-            for (j, power) in lens_box.values().enumerate() {
-                total += (i + 1) * (j + 1) as u32 * power;
+    for box_num in 0..=256 {
+        if let Some(lens_box) = lense_boxes.get(&box_num) {
+            for (lens_num, power) in lens_box.values().enumerate() {
+                total += (box_num + 1) * (lens_num + 1) as u32 * power;
             }
         }
     }
