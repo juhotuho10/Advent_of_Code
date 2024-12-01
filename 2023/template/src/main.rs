@@ -55,9 +55,5 @@ fn read_file(file_name: &str) -> Vec<String> {
     let file = File::open(file_name).expect("File not found");
     let reader = BufReader::new(file);
 
-    reader
-        .lines()
-        .map_while(Result::ok)
-        .filter(|line| !line.is_empty())
-        .collect()
+    reader.lines().map_while(Result::ok).collect()
 }
