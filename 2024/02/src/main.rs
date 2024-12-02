@@ -60,14 +60,7 @@ fn check_level_safety_1(input: &[String]) -> u32 {
     let mut safe_count = 0;
 
     for report in reports {
-        let desc = report.windows(2).all(|r| r[0] > r[1]);
-        let asc = report.windows(2).all(|r| r[0] < r[1]);
-
-        let differences: Vec<u32> = report.windows(2).map(|r| r[0].abs_diff(r[1])).collect();
-        let max_diff = differences.iter().max().unwrap();
-        let min_diff = differences.iter().min().unwrap();
-
-        if (desc || asc) && *max_diff <= 3 && *min_diff >= 1 {
+        if check_report_safety(report) {
             safe_count += 1;
         }
     }
@@ -86,19 +79,7 @@ fn check_level_safety_2(input: &[String]) -> u32 {
             let mut modified_report = report.clone();
             modified_report.remove(removed_level);
 
-            let desc = modified_report.windows(2).all(|r| r[0] > r[1]);
-            let asc = modified_report.windows(2).all(|r| r[0] < r[1]);
-
-            let differences: Vec<u32> = modified_report
-                .windows(2)
-                .map(|r| r[0].abs_diff(r[1]))
-                .collect();
-            let max_diff = differences.iter().max().unwrap();
-            let min_diff = differences.iter().min().unwrap();
-
-            if (desc || asc) && *max_diff <= 3 && *min_diff >= 1 {
-                is_safe = true;
-            }
+            is_safe |= check_report_safety(modified_report);
         }
 
         if is_safe {
@@ -107,6 +88,21 @@ fn check_level_safety_2(input: &[String]) -> u32 {
     }
 
     safe_count
+}
+
+fn check_report_safety(report: Vec<u32>) -> bool {
+    let desc = report.windows(2).all(|r| r[0] > r[1]);
+    let asc = report.windows(2).all(|r| r[0] < r[1]);
+
+    let differences: Vec<u32> = report.windows(2).map(|r| r[0].abs_diff(r[1])).collect();
+    let max_diff = differences.iter().max().unwrap();
+    let min_diff = differences.iter().min().unwrap();
+
+    if (desc || asc) && *max_diff <= 3 && *min_diff >= 1 {
+        return true;
+    }
+
+    false
 }
 
 fn parse_input(input: &[String]) -> Vec<Vec<u32>> {
