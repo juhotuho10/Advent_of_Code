@@ -6,6 +6,7 @@ also the path must not have more than 3 tiles in a straight line
 */
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::env::current_exe;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -69,6 +70,7 @@ struct NodeSearcher {
     total_estimate: u16,
     current_node: Coord,
     visited_nodes_count: u16,
+    subsequent_unoptimal_count: u16,
     prev_dirs: VecDeque<Direction>,
 }
 
@@ -88,6 +90,7 @@ impl NodeSearcher {
             total_estimate,
             current_node,
             visited_nodes_count,
+            subsequent_unoptimal_count: 0,
             prev_dirs,
         }
     }
@@ -166,8 +169,26 @@ impl NumberGraph {
         //let culled: Vec<NodeSearcher> = vec.into_iter().rev().take(size).collect();
 
         vec.sort_by(|a, b| {
+            // 993
             (a.accumulated_cost / a.visited_nodes_count + a.min_future_cost)
                 .cmp(&(b.accumulated_cost / b.visited_nodes_count + b.min_future_cost))
+
+            // 995
+            //(a.accumulated_cost as f32 / a.visited_nodes_count as f32 + (a.min_future_cost as f32))
+            //    .partial_cmp(
+            //        &(b.accumulated_cost as f32 / b.visited_nodes_count as f32
+            //            + (b.min_future_cost as f32)),
+            //    )
+            //    .unwrap()
+
+            // 1000 <
+            //a.accumulated_cost as f32 / a.visited_nodes_count as f32
+            //   + (a.min_future_cost as f32 * 0.2))
+            //   .partial_cmp(
+            //       &(b.accumulated_cost as f32 / b.visited_nodes_count as f32
+            //           + (b.min_future_cost as f32 * 0.2)),
+            //   )
+            //   .unwrap()
         });
         let culled: Vec<NodeSearcher> = vec.into_iter().take(size).collect();
 
@@ -177,6 +198,15 @@ impl NumberGraph {
     fn can_go_direction(previous_dirs: &VecDeque<Direction>, current_dir: Direction) -> bool {
         if previous_dirs.len() < 3 {
             return true;
+        }
+
+        let prev_dir = previous_dirs.back().unwrap();
+        match (prev_dir, current_dir) {
+            (Direction::Up, Direction::Down) => return false,
+            (Direction::Right, Direction::Left) => return false,
+            (Direction::Down, Direction::Up) => return false,
+            (Direction::Left, Direction::Right) => return false,
+            (_, _) => {} // pass
         }
 
         !previous_dirs.iter().all(|&d| d == current_dir)
@@ -193,12 +223,18 @@ impl NumberGraph {
             VecDeque::new(),
         ));
 
+        let mut counter = 0;
+
         while let Some(searcher) = heap.pop() {
             if searcher.current_node == end {
                 //for c in searcher.visited_nodes {
                 //    println!("{}, {}", c.x, c.y);
                 //}
                 return Some(searcher.accumulated_cost);
+            }
+            counter += 1;
+            if counter % 10_000_000 == 0 {
+                dbg!(&heap.len());
             }
             //let heap_len = heap.len();
             //const PRINT_COUNT: usize = 2_000;
@@ -207,9 +243,9 @@ impl NumberGraph {
             //}
 
             // cull the heap to make sure it doesnt get too large
-            if heap.len() > 5_000_000 {
+            if heap.len() > 20_000_000 {
                 dbg!("culling");
-                heap = self.reduce_heap_size(heap, 4_000_000);
+                heap = self.reduce_heap_size(heap, 16_000_000);
             }
 
             //if heap.len() < 20 {
@@ -218,6 +254,10 @@ impl NumberGraph {
             //    dbg!(last_3_dirs);
             //    dbg!(&searcher.visited_nodes);
             //}
+
+            if searcher.subsequent_unoptimal_count > 5 {
+                continue;
+            }
 
             let current_coord = searcher.current_node;
 
@@ -229,9 +269,15 @@ impl NumberGraph {
                         {
                             let new_cost = searcher.accumulated_cost + next_node.cost as u16;
                             if new_cost < (next_node.global_min_cost + 10) {
-                                next_node.global_min_cost = next_node.global_min_cost.min(new_cost);
-
                                 let mut new_searcher = searcher.clone();
+
+                                if new_cost <= next_node.global_min_cost {
+                                    next_node.global_min_cost = new_cost;
+                                    new_searcher.subsequent_unoptimal_count = 0;
+                                } else {
+                                    new_searcher.subsequent_unoptimal_count += 1;
+                                }
+
                                 new_searcher.current_node = $new_coord;
                                 new_searcher.accumulated_cost = new_cost;
                                 new_searcher.min_future_cost =
@@ -278,6 +324,7 @@ fn part_1(_my_input: &[String]) {
     //assert_eq!(example_heatloss, 102);
 
     let my_heatloss = get_min_heatloss_1(_my_input);
+    assert_eq!(my_heatloss, 1014);
     dbg!(my_heatloss);
 }
 
