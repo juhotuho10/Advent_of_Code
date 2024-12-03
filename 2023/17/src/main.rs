@@ -6,7 +6,6 @@ also the path must not have more than 3 tiles in a straight line
 */
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
-use std::env::current_exe;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
