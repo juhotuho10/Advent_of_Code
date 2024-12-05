@@ -1,0 +1,7 @@
+[package]
+edition = "2021"
+name = "Advent-of-Code"
+version = "0.1.0"
+
+[dependencies]
+indexmap = "2.7.0"
