@@ -52,6 +52,19 @@ impl Order {
 
         current_orders
     }
+
+    fn update_batch_order(&self, update: &UpdateBatch) -> IndexSet<u32> {
+        let relevant_orders: Vec<OrderingRule> = self
+            .rules
+            .clone()
+            .into_iter()
+            .filter(|rule| {
+                update.batch.contains(&rule.before) && update.batch.contains(&rule.after)
+            })
+            .collect();
+
+        Order::create_order_ver(relevant_orders)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -126,27 +139,9 @@ fn get_update_sum_1(input: &[String]) -> u32 {
     let mut good_upates = vec![];
 
     for update in updates {
-        let relevant_orders: Vec<OrderingRule> = order_rules
-            .rules
-            .clone()
-            .into_iter()
-            .filter(|rule| {
-                update.batch.contains(&rule.before) && update.batch.contains(&rule.after)
-            })
-            .collect();
+        let order_vec = order_rules.update_batch_order(&update);
 
-        let order_vec = Order::create_order_ver(relevant_orders);
-
-        let order_index_vec: Vec<usize> = update
-            .batch
-            .iter()
-            .map(|batch_num| {
-                order_vec
-                    .iter()
-                    .position(|order_num: &u32| order_num == batch_num)
-                    .unwrap()
-            })
-            .collect();
+        let order_index_vec: Vec<usize> = update_batch_order_index(&update, &order_vec);
 
         if order_index_vec.is_sorted() {
             good_upates.push(update.batch);
@@ -170,27 +165,9 @@ fn get_update_sum_2(input: &[String]) -> u32 {
     let mut bad_updates = vec![];
 
     for update in updates {
-        let relevant_orders: Vec<OrderingRule> = order_rules
-            .rules
-            .clone()
-            .into_iter()
-            .filter(|rule| {
-                update.batch.contains(&rule.before) && update.batch.contains(&rule.after)
-            })
-            .collect();
+        let mut order_vec = order_rules.update_batch_order(&update);
 
-        let mut order_vec = Order::create_order_ver(relevant_orders);
-
-        let order_index_vec: Vec<usize> = update
-            .batch
-            .iter()
-            .map(|batch_num| {
-                order_vec
-                    .iter()
-                    .position(|order_num: &u32| order_num == batch_num)
-                    .unwrap()
-            })
-            .collect();
+        let order_index_vec: Vec<usize> = update_batch_order_index(&update, &order_vec);
 
         if !order_index_vec.is_sorted() {
             order_vec.retain(|num| update.batch.contains(num));
@@ -204,6 +181,19 @@ fn get_update_sum_2(input: &[String]) -> u32 {
     }
 
     middle_sum
+}
+
+fn update_batch_order_index(update: &UpdateBatch, order_vec: &IndexSet<u32>) -> Vec<usize> {
+    update
+        .batch
+        .iter()
+        .map(|batch_num| {
+            order_vec
+                .iter()
+                .position(|order_num: &u32| order_num == batch_num)
+                .unwrap()
+        })
+        .collect()
 }
 
 fn parse_input(input: &[String]) -> (Vec<OrderingRule>, Vec<UpdateBatch>) {
