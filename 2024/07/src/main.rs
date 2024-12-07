@@ -14,9 +14,10 @@ we get a new operator: '||' which can concatinate the number to our existing num
 
 use doers::factorial_design::fullfact;
 use ndarray::{Array2, Axis};
-use num_bigint::BigUint;
+use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 #[derive(Debug)]
 struct Equation {
@@ -81,6 +82,9 @@ impl Equation {
         for possibility in all_possibilities.axis_iter(Axis(0)) {
             let mut total = self.nums[0];
             for (idx_1, op) in possibility.iter().enumerate() {
+                if total > self.ans {
+                    break;
+                }
                 let idx = idx_1 + 1;
                 match op {
                     0 => total += self.nums[idx],
@@ -110,7 +114,7 @@ fn part_1(_my_input: &[String]) {
 
     let example_sum = valid_equation_sum_1(&example_1);
     dbg!(&example_sum);
-    assert_eq!(example_sum, BigUint::from(3749_u32));
+    assert_eq!(example_sum, 3749);
 
     let my_sum = valid_equation_sum_1(_my_input);
     dbg!(my_sum);
@@ -122,26 +126,34 @@ fn part_2(_my_input: &[String]) {
 
     let example_sum = valid_equation_sum_2(&example_2);
     dbg!(&example_sum);
-    assert_eq!(example_sum, BigUint::from(11387_u32));
+    assert_eq!(example_sum, 11387);
 
+    let start = Instant::now();
     let my_sum = valid_equation_sum_2(_my_input);
+    dbg!(start.elapsed().as_millis());
     dbg!(my_sum);
 }
 
-fn valid_equation_sum_1(input: &[String]) -> BigUint {
-    let mut equations = parse_input(input);
-    equations.retain(|eq| eq.fully_check_if_possible_1());
+fn valid_equation_sum_1(input: &[String]) -> u64 {
+    let equations = parse_input(input);
+    let valid_equations: Vec<&Equation> = equations
+        .par_iter()
+        .filter(|eq| eq.fully_check_if_possible_1())
+        .collect();
 
-    let big_int_vec: Vec<BigUint> = equations.iter().map(|eq| BigUint::from(eq.ans)).collect();
+    let big_int_vec: Vec<u64> = valid_equations.iter().map(|eq| eq.ans).collect();
 
     big_int_vec.iter().sum()
 }
 
-fn valid_equation_sum_2(input: &[String]) -> BigUint {
-    let mut equations = parse_input(input);
-    equations.retain(|eq| eq.fully_check_if_possible_2());
+fn valid_equation_sum_2(input: &[String]) -> u64 {
+    let equations = parse_input(input);
+    let valid_equations: Vec<&Equation> = equations
+        .par_iter()
+        .filter(|eq| eq.fully_check_if_possible_2())
+        .collect();
 
-    let big_int_vec: Vec<BigUint> = equations.iter().map(|eq| BigUint::from(eq.ans)).collect();
+    let big_int_vec: Vec<u64> = valid_equations.iter().map(|eq| eq.ans).collect();
 
     big_int_vec.iter().sum()
 }

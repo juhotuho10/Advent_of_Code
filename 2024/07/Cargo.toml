@@ -6,4 +6,4 @@ version = "0.1.0"
 [dependencies]
 doers = "0.2.0"
 ndarray = "0.16.1"
-num-bigint = "0.4.6"
+rayon = "1.10.0"
