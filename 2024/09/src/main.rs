@@ -23,8 +23,6 @@ use std::io::{BufRead, BufReader};
 struct DiskFile {
     num: Option<u64>,
     size: usize,
-
-    checked: bool,
 }
 
 fn main() {
@@ -123,7 +121,6 @@ fn disk_checksum_2(input: &[String]) -> u64 {
         let new_diskfile = DiskFile {
             num: push_num,
             size: num as usize,
-            checked: false,
         };
 
         expanded_disk.push(new_diskfile);
@@ -137,7 +134,7 @@ fn disk_checksum_2(input: &[String]) -> u64 {
 
     while right_diskfile_index > 0 {
         let right_diskfile = expanded_disk[right_diskfile_index];
-        if right_diskfile.num.is_none() || right_diskfile.checked {
+        if right_diskfile.num.is_none() {
             right_diskfile_index -= 1;
             continue;
         }
