@@ -13,11 +13,12 @@ we have to get the total number of possible paths for each trail head that it ca
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 struct Coord {
-    x: u32,
-    y: u32,
+    x: u8,
+    y: u8,
 }
 
 impl Coord {
@@ -57,8 +58,8 @@ impl HikingMap {
         for (y, y_line) in input.iter().enumerate() {
             for (x, x_char) in y_line.chars().enumerate() {
                 let current_coord = Coord {
-                    x: x as u32,
-                    y: y as u32,
+                    x: x as u8,
+                    y: y as u8,
                 };
 
                 let height = x_char.to_digit(10).unwrap();
@@ -109,7 +110,12 @@ impl HikingMap {
         }
     }
 
-    fn has_reached_top(&self, current_coord: Coord, prev_value: &u8) -> u32 {
+    fn has_reached_top(
+        &self,
+        current_coord: Coord,
+        prev_value: &u8,
+        memo: &mut Vec<Vec<Option<u16>>>,
+    ) -> u16 {
         match self.map.get(&current_coord) {
             Some(current_value) => {
                 if *current_value != (prev_value + 1) {
@@ -120,12 +126,21 @@ impl HikingMap {
                     return 1;
                 }
 
-                let up_count = self.has_reached_top(current_coord.up(), current_value);
-                let right_count = self.has_reached_top(current_coord.right(), current_value);
-                let down_count = self.has_reached_top(current_coord.down(), current_value);
-                let left_count = self.has_reached_top(current_coord.left(), current_value);
+                if let Some(cached_result) =
+                    memo[current_coord.y as usize][current_coord.x as usize]
+                {
+                    return cached_result;
+                }
+                let up_count = self.has_reached_top(current_coord.up(), current_value, memo);
+                let right_count = self.has_reached_top(current_coord.right(), current_value, memo);
+                let down_count = self.has_reached_top(current_coord.down(), current_value, memo);
+                let left_count = self.has_reached_top(current_coord.left(), current_value, memo);
 
-                up_count + right_count + down_count + left_count
+                let total_count = up_count + right_count + down_count + left_count;
+
+                memo[current_coord.y as usize][current_coord.x as usize] = Some(total_count);
+
+                total_count
             }
             None => 0,
         }
@@ -159,7 +174,9 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, 81);
 
+    let start = Instant::now();
     let my_sum = path_count_2(_my_input);
+    dbg!(start.elapsed());
     dbg!(my_sum);
 }
 
@@ -195,16 +212,21 @@ fn path_count_2(input: &[String]) -> u32 {
 
     let mut trail_count = 0;
 
+    let height = input.len();
+    let width = input[0].len();
+
+    let mut memo = vec![vec![None; width]; height];
+
     for start in starting_coords {
-        let up_count = hiking_map.has_reached_top(start.up(), &0);
-        let right_count = hiking_map.has_reached_top(start.right(), &0);
-        let down_count = hiking_map.has_reached_top(start.down(), &0);
-        let left_count = hiking_map.has_reached_top(start.left(), &0);
+        let up_count = hiking_map.has_reached_top(start.up(), &0, &mut memo);
+        let right_count = hiking_map.has_reached_top(start.right(), &0, &mut memo);
+        let down_count = hiking_map.has_reached_top(start.down(), &0, &mut memo);
+        let left_count = hiking_map.has_reached_top(start.left(), &0, &mut memo);
 
         trail_count += up_count + right_count + down_count + left_count;
     }
 
-    trail_count
+    trail_count as u32
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
