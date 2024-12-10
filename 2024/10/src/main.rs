@@ -10,94 +10,94 @@ we have to get the total number of possible paths for each trail head that it ca
 
 */
 
-use std::collections::{HashMap, HashSet};
+use rayon::prelude::*;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
-struct Coord {
-    x: u8,
-    y: u8,
-}
-
-impl Coord {
-    fn up(&self) -> Self {
-        Coord {
-            x: self.x,
-            y: self.y - 1,
-        }
-    }
-    fn right(&self) -> Self {
-        Coord {
-            x: self.x + 1,
-            y: self.y,
-        }
-    }
-    fn down(&self) -> Self {
-        Coord {
-            x: self.x,
-            y: self.y + 1,
-        }
-    }
-    fn left(&self) -> Self {
-        Coord {
-            x: self.x - 1,
-            y: self.y,
-        }
-    }
+#[derive(Clone, Copy)]
+struct Location {
+    height: u8,
+    cached: Option<u16>,
 }
 
 struct HikingMap {
-    map: HashMap<Coord, u8>,
+    map: Vec<Vec<Location>>,
 }
 
 impl HikingMap {
+    pub fn get(&self, location: (u8, u8)) -> Option<&Location> {
+        let y = location.0 as usize;
+        let x = location.1 as usize;
+        self.map.get(y)?.get(x)
+    }
+
     fn from_string(input: &[String]) -> Self {
-        let mut hiking_map: HashMap<Coord, u8> = HashMap::new();
+        let default_loc = Location {
+            height: 0,
+            cached: None,
+        };
+
+        let mut hiking_map: Vec<Vec<Location>> =
+            vec![vec![default_loc; input[0].len()]; input.len()];
+
         for (y, y_line) in input.iter().enumerate() {
             for (x, x_char) in y_line.chars().enumerate() {
-                let current_coord = Coord {
-                    x: x as u8,
-                    y: y as u8,
-                };
-
                 let height = x_char.to_digit(10).unwrap();
 
-                hiking_map.insert(current_coord, height as u8);
+                let loc = Location {
+                    height: height as u8,
+                    cached: None,
+                };
+
+                hiking_map[y][x] = loc;
             }
         }
 
         HikingMap { map: hiking_map }
     }
 
-    fn get_trailheads(&self) -> Vec<Coord> {
-        self.map
-            .clone()
-            .into_iter()
-            .filter(|(_, value)| value == &0)
-            .map(|(key, _)| key)
-            .collect()
+    fn get_trailheads(&self) -> Vec<(u8, u8)> {
+        let mut starting_location = vec![];
+        for (y, y_line) in self.map.iter().enumerate() {
+            for (x, loc) in y_line.iter().enumerate() {
+                if loc.height == 0 {
+                    starting_location.push((y as u8, x as u8));
+                }
+            }
+        }
+
+        starting_location
     }
 
-    fn has_reached_unique_top(&self, current_coord: Coord, prev_value: &u8) -> HashSet<Coord> {
-        match self.map.get(&current_coord) {
+    fn has_reached_unique_top(
+        &self,
+        current_coord: (u8, u8),
+        prev_value: &u8,
+    ) -> HashSet<(u8, u8)> {
+        match self.get(current_coord) {
             Some(current_value) => {
-                if *current_value != (prev_value + 1) {
+                let curr_height = current_value.height;
+                if curr_height != (prev_value + 1) {
                     return HashSet::new();
                 }
 
                 let mut return_set = HashSet::new();
 
-                if *current_value == 9 {
+                if curr_height == 9 {
                     return_set.insert(current_coord);
                     return return_set;
                 }
 
-                let up_count = self.has_reached_unique_top(current_coord.up(), current_value);
-                let right_count = self.has_reached_unique_top(current_coord.right(), current_value);
-                let down_count = self.has_reached_unique_top(current_coord.down(), current_value);
-                let left_count = self.has_reached_unique_top(current_coord.left(), current_value);
+                let up_count = self
+                    .has_reached_unique_top((current_coord.0 - 1, current_coord.1), &curr_height);
+                let right_count = self
+                    .has_reached_unique_top((current_coord.0, current_coord.1 + 1), &curr_height);
+                let down_count = self
+                    .has_reached_unique_top((current_coord.0 + 1, current_coord.1), &curr_height);
+                let left_count = self
+                    .has_reached_unique_top((current_coord.0, current_coord.1 - 1), &curr_height);
 
                 return_set.extend(up_count);
                 return_set.extend(right_count);
@@ -110,35 +110,34 @@ impl HikingMap {
         }
     }
 
-    fn has_reached_top(
-        &self,
-        current_coord: Coord,
-        prev_value: &u8,
-        memo: &mut Vec<Vec<Option<u16>>>,
-    ) -> u16 {
-        match self.map.get(&current_coord) {
-            Some(current_value) => {
-                if *current_value != (prev_value + 1) {
+    fn has_reached_top(&mut self, current_coord: (u8, u8), prev_value: &u8) -> u16 {
+        match self.get(current_coord) {
+            Some(current_location) => {
+                let curr_height = current_location.height;
+                if curr_height != (prev_value + 1) {
                     return 0;
                 }
 
-                if *current_value == 9 {
+                if curr_height == 9 {
                     return 1;
                 }
 
-                if let Some(cached_result) =
-                    memo[current_coord.y as usize][current_coord.x as usize]
-                {
+                if let Some(cached_result) = current_location.cached {
                     return cached_result;
                 }
-                let up_count = self.has_reached_top(current_coord.up(), current_value, memo);
-                let right_count = self.has_reached_top(current_coord.right(), current_value, memo);
-                let down_count = self.has_reached_top(current_coord.down(), current_value, memo);
-                let left_count = self.has_reached_top(current_coord.left(), current_value, memo);
+                let up_count =
+                    self.has_reached_top((current_coord.0 - 1, current_coord.1), &curr_height);
+                let right_count =
+                    self.has_reached_top((current_coord.0, current_coord.1 + 1), &curr_height);
+                let down_count =
+                    self.has_reached_top((current_coord.0 + 1, current_coord.1), &curr_height);
+                let left_count =
+                    self.has_reached_top((current_coord.0, current_coord.1 - 1), &curr_height);
 
                 let total_count = up_count + right_count + down_count + left_count;
 
-                memo[current_coord.y as usize][current_coord.x as usize] = Some(total_count);
+                self.map[current_coord.0 as usize][current_coord.1 as usize].cached =
+                    Some(total_count);
 
                 total_count
             }
@@ -185,43 +184,39 @@ fn path_count_1(input: &[String]) -> u32 {
 
     let starting_coords = hiking_map.get_trailheads();
 
-    let mut trail_count = 0;
+    let trail_count: usize = starting_coords
+        .par_iter()
+        .map(|start| {
+            let mut total_trails = HashSet::new();
+            let up_count = hiking_map.has_reached_unique_top((start.0 - 1, start.1), &0);
+            let right_count = hiking_map.has_reached_unique_top((start.0, start.1 + 1), &0);
+            let down_count = hiking_map.has_reached_unique_top((start.0 + 1, start.1), &0);
+            let left_count = hiking_map.has_reached_unique_top((start.0, start.1 - 1), &0);
 
-    for start in starting_coords {
-        let mut total_trails = HashSet::new();
-        let up_count = hiking_map.has_reached_unique_top(start.up(), &0);
-        let right_count = hiking_map.has_reached_unique_top(start.right(), &0);
-        let down_count = hiking_map.has_reached_unique_top(start.down(), &0);
-        let left_count = hiking_map.has_reached_unique_top(start.left(), &0);
+            total_trails.extend(up_count);
+            total_trails.extend(right_count);
+            total_trails.extend(down_count);
+            total_trails.extend(left_count);
 
-        total_trails.extend(up_count);
-        total_trails.extend(right_count);
-        total_trails.extend(down_count);
-        total_trails.extend(left_count);
-
-        trail_count += total_trails.len();
-    }
+            total_trails.len()
+        })
+        .sum();
 
     trail_count as u32
 }
 
 fn path_count_2(input: &[String]) -> u32 {
-    let hiking_map = HikingMap::from_string(input);
+    let mut hiking_map = HikingMap::from_string(input);
 
     let starting_coords = hiking_map.get_trailheads();
 
     let mut trail_count = 0;
 
-    let height = input.len();
-    let width = input[0].len();
-
-    let mut memo = vec![vec![None; width]; height];
-
     for start in starting_coords {
-        let up_count = hiking_map.has_reached_top(start.up(), &0, &mut memo);
-        let right_count = hiking_map.has_reached_top(start.right(), &0, &mut memo);
-        let down_count = hiking_map.has_reached_top(start.down(), &0, &mut memo);
-        let left_count = hiking_map.has_reached_top(start.left(), &0, &mut memo);
+        let up_count = hiking_map.has_reached_top((start.0 - 1, start.1), &0);
+        let right_count = hiking_map.has_reached_top((start.0, start.1 + 1), &0);
+        let down_count = hiking_map.has_reached_top((start.0 + 1, start.1), &0);
+        let left_count = hiking_map.has_reached_top((start.0, start.1 - 1), &0);
 
         trail_count += up_count + right_count + down_count + left_count;
     }

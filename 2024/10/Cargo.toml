@@ -2,3 +2,6 @@
 edition = "2021"
 name = "Advent-of-Code"
 version = "0.1.0"
+
+[dependencies]
+rayon = "1.10.0"
