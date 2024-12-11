@@ -8,6 +8,7 @@ also the path must not have more than 3 tiles in a straight line
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum Direction {
@@ -60,6 +61,43 @@ impl Coord {
 struct Node {
     cost: u16,
     global_min_cost: u16,
+    global_min_cost_from_turn: Option<u16>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+struct AStarNode {
+    current_node: Coord,
+    accumulated_cost: u16,
+    min_future_cost: u16,
+    total_estimate: u16,
+}
+
+impl AStarNode {
+    fn new(accumulated_cost: u16, min_future_cost: u16, current_node: Coord) -> Self {
+        let total_estimate = accumulated_cost + min_future_cost;
+
+        AStarNode {
+            accumulated_cost,
+            min_future_cost,
+            total_estimate,
+            current_node,
+        }
+    }
+}
+
+impl Ord for AStarNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .total_estimate
+            .cmp(&self.total_estimate)
+            .then_with(|| other.min_future_cost.cmp(&self.min_future_cost))
+    }
+}
+
+impl PartialOrd for AStarNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -141,6 +179,7 @@ impl NumberGraph {
                     Node {
                         cost: num,
                         global_min_cost: u16::MAX / 2,
+                        global_min_cost_from_turn: None,
                     },
                 );
             }
@@ -149,7 +188,51 @@ impl NumberGraph {
         NumberGraph { cost_map }
     }
 
-    fn get_cost_estimate(&self, start: &Coord, end: &Coord) -> u16 {
+    fn normal_a_star_cost(&self, start: &Coord, end: &Coord) -> Option<u16> {
+        let mut heap: BinaryHeap<AStarNode> = BinaryHeap::new();
+        let mut cost_so_far: HashMap<Coord, u16> = HashMap::new();
+
+        heap.push(AStarNode::new(
+            0,
+            self.get_min_dist_to_end(start, end),
+            *start,
+        ));
+        cost_so_far.insert(*start, 0);
+
+        while let Some(current_node) = heap.pop() {
+            let current_coord = current_node.current_node;
+
+            if current_coord == *end {
+                return Some(current_node.accumulated_cost);
+            }
+
+            let current_cost = cost_so_far[&current_coord];
+
+            macro_rules! process_direction {
+                ($new_coord:expr) => {
+                    if let Some(next_node) = self.cost_map.get(&$new_coord) {
+                        let new_cost = current_cost + next_node.cost as u16;
+
+                        if new_cost < *cost_so_far.get(&$new_coord).unwrap_or(&u16::MAX) {
+                            cost_so_far.insert($new_coord, new_cost);
+
+                            let min_future_cost = self.get_min_dist_to_end(&$new_coord, end);
+                            heap.push(AStarNode::new(new_cost, min_future_cost, $new_coord));
+                        }
+                    }
+                };
+            }
+
+            process_direction!(current_coord.up());
+            process_direction!(current_coord.right());
+            process_direction!(current_coord.down());
+            process_direction!(current_coord.left());
+        }
+
+        None // No path found
+    }
+
+    fn get_min_dist_to_end(&self, start: &Coord, end: &Coord) -> u16 {
         let diff_x = end.x.abs_diff(start.x);
         let diff_y = end.y.abs_diff(start.y);
 
@@ -169,8 +252,8 @@ impl NumberGraph {
 
         vec.sort_by(|a, b| {
             // 993
-            (a.accumulated_cost / a.visited_nodes_count + a.min_future_cost)
-                .cmp(&(b.accumulated_cost / b.visited_nodes_count + b.min_future_cost))
+            //(a.accumulated_cost / a.visited_nodes_count + a.min_future_cost)
+            //    .cmp(&(b.accumulated_cost / b.visited_nodes_count + b.min_future_cost))
 
             // 995
             //(a.accumulated_cost as f32 / a.visited_nodes_count as f32 + (a.min_future_cost as f32))
@@ -188,6 +271,8 @@ impl NumberGraph {
             //           + (b.min_future_cost as f32 * 0.2)),
             //   )
             //   .unwrap()
+
+            (a.total_estimate).cmp(&(b.total_estimate))
         });
         let culled: Vec<NodeSearcher> = vec.into_iter().take(size).collect();
 
@@ -213,10 +298,11 @@ impl NumberGraph {
 
     fn max_3_in_row_a_star(&mut self, start: Coord, end: Coord) -> Option<u16> {
         let mut heap: BinaryHeap<NodeSearcher> = BinaryHeap::new();
+        let mut cost_cache: HashMap<Coord, u16> = HashMap::new();
 
         heap.push(NodeSearcher::new(
             0,
-            self.get_cost_estimate(&start, &end),
+            self.normal_a_star_cost(&start, &end).unwrap(),
             start,
             1,
             VecDeque::new(),
@@ -247,13 +333,6 @@ impl NumberGraph {
                 heap = self.reduce_heap_size(heap, 16_000_000);
             }
 
-            //if heap.len() < 20 {
-            //    let last_3_dirs: Vec<&Direction> =
-            //        searcher.prev_dirs.iter().rev().take(3).collect();
-            //    dbg!(last_3_dirs);
-            //    dbg!(&searcher.visited_nodes);
-            //}
-
             if searcher.subsequent_unoptimal_count > 5 {
                 continue;
             }
@@ -263,11 +342,27 @@ impl NumberGraph {
             macro_rules! process_direction {
                 ($direction:expr, $new_coord:expr) => {
                     if let Some(next_node) = self.cost_map.get_mut(&$new_coord) {
-                        if NumberGraph::can_go_direction(&searcher.prev_dirs, $direction)
-                        //&& !searcher.visited_nodes.contains(&$new_coord)
-                        {
+                        if NumberGraph::can_go_direction(&searcher.prev_dirs, $direction) {
                             let new_cost = searcher.accumulated_cost + next_node.cost as u16;
-                            if new_cost < (next_node.global_min_cost + 10) {
+                            let mut should_continue = true;
+
+                            if let Some(&prev_dir) = searcher.prev_dirs.back() {
+                                let has_turned = prev_dir != $direction;
+
+                                if has_turned {
+                                    if let Some(prev_turn_cost) =
+                                        next_node.global_min_cost_from_turn
+                                    {
+                                        if prev_turn_cost < new_cost {
+                                            should_continue = false;
+                                        }
+                                    } else {
+                                        next_node.global_min_cost_from_turn = Some(new_cost);
+                                    }
+                                }
+                            }
+
+                            if new_cost < (next_node.global_min_cost + 10) && should_continue {
                                 let mut new_searcher = searcher.clone();
 
                                 if new_cost <= next_node.global_min_cost {
@@ -279,8 +374,20 @@ impl NumberGraph {
 
                                 new_searcher.current_node = $new_coord;
                                 new_searcher.accumulated_cost = new_cost;
-                                new_searcher.min_future_cost =
-                                    self.get_cost_estimate(&$new_coord, &end);
+
+                                let mut new_cost = false;
+                                new_searcher.min_future_cost = match cost_cache.get(&$new_coord) {
+                                    Some(cost) => *cost,
+                                    None => {
+                                        new_cost = true;
+                                        self.normal_a_star_cost(&$new_coord, &end).unwrap()
+                                    }
+                                };
+
+                                if new_cost {
+                                    cost_cache.insert($new_coord, new_searcher.min_future_cost);
+                                }
+
                                 new_searcher.new_total_estimate();
 
                                 new_searcher.add_direction($direction);
@@ -318,12 +425,13 @@ fn part_1(_my_input: &[String]) {
     let example_1 = read_file("example_1.txt");
     dbg!(&example_1);
 
-    //let example_heatloss = get_min_heatloss_1(&example_1);
-    //dbg!(&example_heatloss);
-    //assert_eq!(example_heatloss, 102);
+    let start = Instant::now();
+    let example_heatloss = get_min_heatloss_1(&example_1);
+    dbg!(start.elapsed());
+    dbg!(&example_heatloss);
 
     let my_heatloss = get_min_heatloss_1(_my_input);
-    assert_eq!(my_heatloss, 1014);
+    assert_eq!(my_heatloss, 1008);
     dbg!(my_heatloss);
 }
 
