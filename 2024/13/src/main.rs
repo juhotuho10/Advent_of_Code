@@ -63,8 +63,7 @@ impl ClawMachine {
 
         match matrix.inv() {
             Ok(inverse) => {
-                let product: ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 1]>> =
-                    self.target.dot(&inverse);
+                let product = self.target.dot(&inverse);
 
                 if !product.iter().all(|&val| (val - val.round()).abs() < 0.001) {
                     return None;
