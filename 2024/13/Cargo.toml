@@ -5,3 +5,5 @@ version = "0.1.0"
 
 [dependencies]
 regex = "1.11.1"
+ndarray = "0.15"
+ndarray-linalg = { version = "0.16.0", features = ["intel-mkl-static"] }
