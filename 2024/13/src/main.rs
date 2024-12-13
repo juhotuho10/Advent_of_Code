@@ -28,7 +28,7 @@ struct ClawMachine {
 }
 
 impl ClawMachine {
-    fn from_string_1(input: Vec<&String>) -> Self {
+    fn from_string(input: Vec<&String>, add_on_num: f64) -> Self {
         assert!(input.len() == 3);
         let button_regex = Regex::new(r"Button [AB]: X\+(\d+), Y\+(\d+)").unwrap();
         let target_regex = Regex::new(r"Prize: X=(\d+), Y=(\d+)").unwrap();
@@ -47,33 +47,8 @@ impl ClawMachine {
                 b_button_capture[2].parse().unwrap(),
             ],
             target: [
-                target_capture[1].parse().unwrap(),
-                target_capture[2].parse().unwrap(),
-            ],
-        }
-    }
-
-    fn from_string_2(input: Vec<&String>) -> Self {
-        assert!(input.len() == 3);
-        let button_regex = Regex::new(r"Button [AB]: X\+(\d+), Y\+(\d+)").unwrap();
-        let target_regex = Regex::new(r"Prize: X=(\d+), Y=(\d+)").unwrap();
-
-        let a_button_capture = button_regex.captures(input[0]).unwrap();
-        let b_button_capture = button_regex.captures(input[1]).unwrap();
-        let target_capture = target_regex.captures(input[2]).unwrap();
-
-        ClawMachine {
-            a: [
-                a_button_capture[1].parse().unwrap(),
-                a_button_capture[2].parse().unwrap(),
-            ],
-            b: [
-                b_button_capture[1].parse().unwrap(),
-                b_button_capture[2].parse().unwrap(),
-            ],
-            target: [
-                target_capture[1].parse::<f64>().unwrap() + 10000000000000.0,
-                target_capture[2].parse::<f64>().unwrap() + 10000000000000.0,
+                target_capture[1].parse::<f64>().unwrap() + add_on_num,
+                target_capture[2].parse::<f64>().unwrap() + add_on_num,
             ],
         }
     }
@@ -131,7 +106,7 @@ fn part_2(_my_input: &[String]) {
 }
 
 fn button_press_cost_1(input: &[String]) -> u64 {
-    let claw_machines = parse_input_1(input);
+    let claw_machines = parse_input(input, 0.0);
 
     claw_machines
         .iter()
@@ -140,7 +115,7 @@ fn button_press_cost_1(input: &[String]) -> u64 {
 }
 
 fn button_press_cost_2(input: &[String]) -> u64 {
-    let claw_machines = parse_input_2(input);
+    let claw_machines = parse_input(input, 10000000000000.0);
 
     claw_machines
         .iter()
@@ -148,7 +123,7 @@ fn button_press_cost_2(input: &[String]) -> u64 {
         .sum()
 }
 
-fn parse_input_1(input: &[String]) -> Vec<ClawMachine> {
+fn parse_input(input: &[String], add_on_num: f64) -> Vec<ClawMachine> {
     let mut claw_machines = vec![];
     let mut claw_machine_strings: Vec<Vec<&String>> = vec![];
 
@@ -164,29 +139,7 @@ fn parse_input_1(input: &[String]) -> Vec<ClawMachine> {
     claw_machine_strings.push(single_claw_machine);
 
     for claw_machine in claw_machine_strings {
-        claw_machines.push(ClawMachine::from_string_1(claw_machine));
-    }
-
-    claw_machines
-}
-
-fn parse_input_2(input: &[String]) -> Vec<ClawMachine> {
-    let mut claw_machines = vec![];
-    let mut claw_machine_strings: Vec<Vec<&String>> = vec![];
-
-    let mut single_claw_machine = vec![];
-    for line in input {
-        if line.is_empty() {
-            claw_machine_strings.push(single_claw_machine.clone());
-            single_claw_machine.clear();
-        } else {
-            single_claw_machine.push(line);
-        }
-    }
-    claw_machine_strings.push(single_claw_machine);
-
-    for claw_machine in claw_machine_strings {
-        claw_machines.push(ClawMachine::from_string_2(claw_machine));
+        claw_machines.push(ClawMachine::from_string(claw_machine, add_on_num));
     }
 
     claw_machines
