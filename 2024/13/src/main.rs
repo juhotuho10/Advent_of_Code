@@ -20,7 +20,8 @@ use ndarray::{arr1, stack, Array1, Array2, Axis};
 use ndarray_linalg::Inverse;
 use regex::Regex;
 use std::fs::File;
-use std::io::{BufRead, BufReader}; // This imports all needed traits including Inverse
+use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 #[derive(Debug)]
 struct ClawMachine {
@@ -101,7 +102,9 @@ fn part_2(_my_input: &[String]) {
     let example_2 = read_file("example_2.txt");
     dbg!(&example_2);
 
+    let start = Instant::now();
     let my_sum = button_press_cost_2(_my_input);
+    dbg!(start.elapsed());
     dbg!(my_sum);
 }
 
