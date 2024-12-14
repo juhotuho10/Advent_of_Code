@@ -121,6 +121,10 @@ fn robot_safety_factor_1(input: &[String], max_coords: Coord) -> u32 {
         .iter_mut()
         .for_each(|r| r.step_forward(100, max_coords));
 
+    get_safety_factor(&paths, &max_coords)
+}
+
+fn get_safety_factor(robots: &Vec<RobotPath>, max_coords: &Coord) -> u32 {
     let mut q1 = 0;
     let mut q2 = 0;
     let mut q3 = 0;
@@ -128,8 +132,7 @@ fn robot_safety_factor_1(input: &[String], max_coords: Coord) -> u32 {
 
     let middle_x = max_coords.x / 2;
     let middle_y = max_coords.y / 2;
-
-    for robot in paths {
+    for robot in robots {
         let pos = robot.pos;
 
         if pos.x == middle_x || pos.y == middle_y {
@@ -168,6 +171,8 @@ fn time_till_easter_egg(input: &[String], max_coords: Coord) -> u32 {
         let mut current_display = display.clone();
         paths.iter_mut().for_each(|r| r.step_forward(1, max_coords));
 
+        let safety_factor = get_safety_factor(&paths, &max_coords);
+
         for robot in &paths {
             let pos = robot.pos;
             current_display[pos.y as usize][pos.x as usize] = "##";
@@ -181,7 +186,16 @@ fn time_till_easter_egg(input: &[String], max_coords: Coord) -> u32 {
             writeln!(file, "{line_string}").expect("Writing in missing songs file");
         }
 
-        writeln!(file, "iteration - {}", step).expect("Writing in missing songs file");
+        writeln!(
+            file,
+            "iteration - {} safety factor: {}",
+            step, safety_factor
+        )
+        .expect("Writing in missing songs file");
+
+        if safety_factor < 170_000_000 {
+            return step;
+        }
     }
 
     0
