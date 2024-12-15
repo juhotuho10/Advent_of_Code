@@ -291,11 +291,11 @@ fn part_2(_my_input: &[String]) {
     let example_2 = read_file("example_2.txt");
     dbg!(&example_2);
 
-    let example_sum = solution_2(&example_2);
+    let example_sum = warehouse_box_sum_2(&example_2);
     dbg!(&example_sum);
     assert_eq!(example_sum, 9021);
 
-    let my_sum = solution_2(_my_input);
+    let my_sum = warehouse_box_sum_2(_my_input);
     dbg!(my_sum);
 }
 
@@ -309,7 +309,7 @@ fn warehouse_box_sum_1(input: &[String]) -> u32 {
     warehouse.get_box_sum()
 }
 
-fn solution_2(input: &[String]) -> u32 {
+fn warehouse_box_sum_2(input: &[String]) -> u32 {
     let mut warehouse = Warehouse::from_string(input, true);
     warehouse.pretty_print();
     warehouse.arrange_warehouse();
