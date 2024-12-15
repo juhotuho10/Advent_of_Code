@@ -150,21 +150,15 @@ impl Warehouse {
 
             if moved {
                 // take all the coordinates for the boxes that are meant to be moved
+                // turn all the tiles in the hashmap that are mean to be moved to not have tiles in them
                 // and turn in into (coord, box tile)
                 let mut coord_boxes: Vec<(Coord, Tile)> = movable_tiles
                     .into_iter()
                     .map(|coord| {
-                        (
-                            coord.clone(),
-                            self.boxes.get(&coord).unwrap().clone().unwrap(),
-                        )
+                        let prev_tile = self.boxes.insert(coord.clone(), None).unwrap().unwrap();
+                        (coord.clone(), prev_tile)
                     })
                     .collect();
-
-                // turn all the tiles in the hashmap that are mean to be moved to not have tiles in them
-                coord_boxes.iter().for_each(|(coord, _)| {
-                    self.boxes.insert(coord.clone(), None);
-                });
 
                 // increment all the tile coords to the direction that we are moving to for the boxes that we took out of the hashmap
                 coord_boxes
