@@ -15,6 +15,7 @@ and return the count of the coords
 
 */
 
+use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -79,6 +80,18 @@ struct NodeSearcher {
     visited_coords: Vec<Coord>,
 }
 
+impl Ord for NodeSearcher {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.accumulated_cost.cmp(&other.accumulated_cost)
+    }
+}
+
+impl PartialOrd for NodeSearcher {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl NodeSearcher {
     fn get_forward_coord(&self) -> Coord {
         self.current_node.go_dir(self.facing_dir)
@@ -127,18 +140,6 @@ impl NodeSearcher {
     }
 }
 
-impl Ord for NodeSearcher {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.accumulated_cost.cmp(&self.accumulated_cost)
-    }
-}
-
-impl PartialOrd for NodeSearcher {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 struct NodeGraph {
     start_coord: Coord,
     end_coord: Coord,
@@ -182,7 +183,8 @@ impl NodeGraph {
     }
 
     fn get_lowers_cost_paths(&mut self) -> Vec<NodeSearcher> {
-        let mut cost_heap: BinaryHeap<NodeSearcher> = BinaryHeap::new();
+        // constructing a min heap using Reverse ord trait
+        let mut cost_heap: BinaryHeap<Reverse<NodeSearcher>> = BinaryHeap::new();
 
         let start_searcher = NodeSearcher {
             accumulated_cost: 0,
@@ -191,13 +193,14 @@ impl NodeGraph {
             turned: true,
             visited_coords: vec![self.start_coord],
         };
-        cost_heap.push(start_searcher);
+        cost_heap.push(Reverse(start_searcher));
 
         let mut end_node_searchers = vec![];
 
-        while let Some(mut searcher) = cost_heap.pop() {
+        while let Some(searcher) = cost_heap.pop() {
             //dbg!(searcher.current_node);
             //dbg!(searcher.accumulated_cost);
+            let mut searcher = searcher.0;
 
             if searcher.current_node == self.end_coord {
                 end_node_searchers.push(searcher);
@@ -218,20 +221,20 @@ impl NodeGraph {
             let new_left_coord = new_left_searcher.get_forward_coord();
             if self.cost_map.contains_key(&new_left_coord) {
                 new_left_searcher.walk_forward();
-                cost_heap.push(new_left_searcher);
+                cost_heap.push(Reverse(new_left_searcher));
             }
 
             let mut new_right_searcher = searcher.turn_right();
             let new_right_coord = new_right_searcher.get_forward_coord();
             if self.cost_map.contains_key(&new_right_coord) {
                 new_right_searcher.walk_forward();
-                cost_heap.push(new_right_searcher);
+                cost_heap.push(Reverse(new_right_searcher));
             }
 
             let next_forward_coord = searcher.get_forward_coord();
             if self.cost_map.contains_key(&next_forward_coord) {
                 searcher.walk_forward();
-                cost_heap.push(searcher);
+                cost_heap.push(Reverse(searcher));
             }
         }
 
