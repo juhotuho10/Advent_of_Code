@@ -6,12 +6,12 @@ also the path must not have more than 3 tiles in a straight line
 */
 
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::{BinaryHeap, HashMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 enum Dir {
     Up,
     Left,
@@ -70,19 +70,11 @@ impl Coord {
 
 struct Node {
     cost: u16,
-    min_cost_1: u16,
-    min_cost_2: u16,
-    min_cost_3: u16,
 }
 
 impl Node {
     fn new(cost: u16) -> Self {
-        Node {
-            cost,
-            min_cost_1: u16::MAX,
-            min_cost_2: u16::MAX,
-            min_cost_3: u16::MAX,
-        }
+        Node { cost }
     }
 }
 
@@ -150,13 +142,13 @@ impl NodeSearcher {
 }
 
 struct NumberGraph {
-    // TODO: IMPLEMENT A HASHMAP THAT CONSIDERS BOTH STEPS TAKEN AND APPROACH DIR TO SEE IF THE SEARCHER SHOULD BE DISCARDED
-    cost_map: HashMap<Coord, Node>,
+    valid_coords: HashMap<Coord, Node>,
+    cost_map: HashMap<(Coord, Dir, u8), u16>,
 }
 
 impl NumberGraph {
     fn from_string(input: &[String]) -> Self {
-        let mut cost_map: HashMap<Coord, Node> = HashMap::new();
+        let mut valid_coords: HashMap<Coord, Node> = HashMap::new();
 
         for (y, y_line) in input.iter().enumerate() {
             for (x, x_char) in y_line.char_indices() {
@@ -166,11 +158,15 @@ impl NumberGraph {
                     x: x as i32,
                     y: y as i32,
                 };
-                cost_map.insert(current_coord, Node::new(num));
+                valid_coords.insert(current_coord, Node::new(num));
             }
         }
 
-        NumberGraph { cost_map }
+        let cost_map: HashMap<(Coord, Dir, u8), u16> = HashMap::new();
+        NumberGraph {
+            valid_coords,
+            cost_map,
+        }
     }
 
     fn max_3_in_row_djiksta(&mut self, start: Coord, end: Coord) -> Option<u16> {
@@ -192,10 +188,10 @@ impl NumberGraph {
 
             let mut right_searcher = searcher.turn_right();
             let next_right_coords = right_searcher.get_forward();
-            if let Some(right_node) = self.cost_map.get_mut(&next_right_coords) {
+            if let Some(right_node) = self.valid_coords.get(&next_right_coords) {
                 right_searcher.step_into_node(next_right_coords, right_node);
 
-                if Self::can_continue(right_node, &right_searcher) {
+                if self.can_continue_1(next_right_coords, &right_searcher) {
                     searcher_heap.push(Reverse(right_searcher));
                 }
             }
@@ -203,19 +199,19 @@ impl NumberGraph {
             let mut left_searcher = searcher.turn_left();
 
             let next_left_coords = left_searcher.get_forward();
-            if let Some(left_node) = self.cost_map.get_mut(&next_left_coords) {
+            if let Some(left_node) = self.valid_coords.get(&next_left_coords) {
                 left_searcher.step_into_node(next_left_coords, left_node);
 
-                if Self::can_continue(left_node, &left_searcher) {
+                if self.can_continue_1(next_left_coords, &left_searcher) {
                     searcher_heap.push(Reverse(left_searcher));
                 }
             }
 
             let next_straight_coords = searcher.get_forward();
-            if let Some(straight_node) = self.cost_map.get_mut(&next_straight_coords) {
+            if let Some(straight_node) = self.valid_coords.get(&next_straight_coords) {
                 searcher.step_into_node(next_straight_coords, straight_node);
 
-                if Self::can_continue(straight_node, &searcher) {
+                if self.can_continue_1(next_straight_coords, &searcher) {
                     searcher_heap.push(Reverse(searcher));
                 }
             }
@@ -224,27 +220,96 @@ impl NumberGraph {
         None
     }
 
-    fn can_continue(next_node: &mut Node, searcher: &NodeSearcher) -> bool {
+    fn can_continue_1(&mut self, next_node_coord: Coord, searcher: &NodeSearcher) -> bool {
         match searcher.straigh_steps {
-            1 => {
-                if next_node.min_cost_1 < searcher.accumulated_cost {
-                    return false;
-                }
-                next_node.min_cost_1 = searcher.accumulated_cost;
-            }
-            2 => {
-                if next_node.min_cost_2 < searcher.accumulated_cost {
-                    return false;
-                }
-                next_node.min_cost_2 = searcher.accumulated_cost;
-            }
-            3 => {
-                if next_node.min_cost_3 < searcher.accumulated_cost {
-                    return false;
-                }
-                next_node.min_cost_3 = searcher.accumulated_cost;
+            (1..=3) => {
+                let key = (next_node_coord, searcher.facing_dir, searcher.straigh_steps);
+                if let Some(prev_min_cost) = self.cost_map.get_mut(&key) {
+                    if *prev_min_cost <= searcher.accumulated_cost {
+                        return false;
+                    }
+                    *prev_min_cost = searcher.accumulated_cost;
+                } else {
+                    self.cost_map.insert(key, searcher.accumulated_cost);
+                };
             }
             4 => {
+                return false;
+            }
+            _ => unreachable!(),
+        }
+
+        true
+    }
+
+    fn min_4_max_10_in_row_djiksta(&mut self, start: Coord, end: Coord) -> Option<u16> {
+        // cost min heap
+        let mut searcher_heap: BinaryHeap<Reverse<NodeSearcher>> = BinaryHeap::new();
+
+        searcher_heap.push(Reverse(NodeSearcher {
+            accumulated_cost: 0,
+            current_node: start,
+            straigh_steps: 0,
+            facing_dir: Dir::Right,
+        }));
+
+        while let Some(min_dist_searcher) = searcher_heap.pop() {
+            let searcher = min_dist_searcher.0;
+            if searcher.current_node == end {
+                return Some(searcher.accumulated_cost);
+            }
+
+            let mut straight_searcher = searcher.clone();
+            let next_straight_coords = straight_searcher.get_forward();
+            if let Some(straight_node) = self.valid_coords.get(&next_straight_coords) {
+                straight_searcher.step_into_node(next_straight_coords, straight_node);
+
+                if self.can_continue_2(next_straight_coords, &straight_searcher) {
+                    searcher_heap.push(Reverse(straight_searcher));
+                }
+            }
+
+            if searcher.straigh_steps >= 4 {
+                let mut right_searcher = searcher.turn_right();
+                let next_right_coords = right_searcher.get_forward();
+                if let Some(right_node) = self.valid_coords.get(&next_right_coords) {
+                    right_searcher.step_into_node(next_right_coords, right_node);
+
+                    if self.can_continue_2(next_right_coords, &right_searcher) {
+                        searcher_heap.push(Reverse(right_searcher));
+                    }
+                }
+
+                let mut left_searcher = searcher.turn_left();
+
+                let next_left_coords = left_searcher.get_forward();
+                if let Some(left_node) = self.valid_coords.get(&next_left_coords) {
+                    left_searcher.step_into_node(next_left_coords, left_node);
+
+                    if self.can_continue_2(next_left_coords, &left_searcher) {
+                        searcher_heap.push(Reverse(left_searcher));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn can_continue_2(&mut self, next_node_coord: Coord, searcher: &NodeSearcher) -> bool {
+        match searcher.straigh_steps {
+            (1..=10) => {
+                let key = (next_node_coord, searcher.facing_dir, searcher.straigh_steps);
+                if let Some(prev_min_cost) = self.cost_map.get_mut(&key) {
+                    if *prev_min_cost <= searcher.accumulated_cost {
+                        return false;
+                    }
+                    *prev_min_cost = searcher.accumulated_cost;
+                } else {
+                    self.cost_map.insert(key, searcher.accumulated_cost);
+                };
+            }
+            11 => {
                 return false;
             }
             _ => unreachable!(),
@@ -274,13 +339,23 @@ fn part_1(_my_input: &[String]) {
     let start = Instant::now();
     let my_heatloss = get_min_heatloss_1(_my_input);
     dbg!(start.elapsed());
-    assert_eq!(my_heatloss, 1008);
     dbg!(my_heatloss);
 }
 
 fn part_2(_my_input: &[String]) {
     let example_2 = read_file("example_2.txt");
     dbg!(&example_2);
+
+    let start = Instant::now();
+    let example_heatloss = get_min_heatloss_2(&example_2);
+    assert_eq!(example_heatloss, 94);
+    dbg!(start.elapsed());
+    dbg!(&example_heatloss);
+
+    let start = Instant::now();
+    let my_heatloss = get_min_heatloss_2(_my_input);
+    dbg!(start.elapsed());
+    dbg!(my_heatloss);
 }
 
 fn get_min_heatloss_1(input: &[String]) -> u16 {
@@ -288,11 +363,25 @@ fn get_min_heatloss_1(input: &[String]) -> u16 {
 
     let start_node = Coord { x: 0, y: 0 };
 
-    let end_node = *graph.cost_map.keys().max().unwrap();
+    let end_node = *graph.valid_coords.keys().max().unwrap();
 
     //dbg!(end_node);
 
     graph.max_3_in_row_djiksta(start_node, end_node).unwrap()
+}
+
+fn get_min_heatloss_2(input: &[String]) -> u16 {
+    let mut graph = NumberGraph::from_string(input);
+
+    let start_node = Coord { x: 0, y: 0 };
+
+    let end_node = *graph.valid_coords.keys().max().unwrap();
+
+    //dbg!(end_node);
+
+    graph
+        .min_4_max_10_in_row_djiksta(start_node, end_node)
+        .unwrap()
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
