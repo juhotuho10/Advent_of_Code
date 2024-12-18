@@ -5,8 +5,11 @@ also the path must not have more than 3 tiles in a straight line
 
 */
 
+extern crate fxhash;
+use fxhash::FxHashMap;
+
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
@@ -142,13 +145,13 @@ impl NodeSearcher {
 }
 
 struct NumberGraph {
-    valid_coords: HashMap<Coord, Node>,
-    cost_map: HashMap<(Coord, Dir, u8), u16>,
+    valid_coords: FxHashMap<Coord, Node>,
+    cost_map: FxHashMap<(Coord, Dir, u8), u16>,
 }
 
 impl NumberGraph {
     fn from_string(input: &[String]) -> Self {
-        let mut valid_coords: HashMap<Coord, Node> = HashMap::new();
+        let mut valid_coords: FxHashMap<Coord, Node> = FxHashMap::default();
 
         for (y, y_line) in input.iter().enumerate() {
             for (x, x_char) in y_line.char_indices() {
@@ -162,7 +165,7 @@ impl NumberGraph {
             }
         }
 
-        let cost_map: HashMap<(Coord, Dir, u8), u16> = HashMap::new();
+        let cost_map: FxHashMap<(Coord, Dir, u8), u16> = FxHashMap::default();
         NumberGraph {
             valid_coords,
             cost_map,
