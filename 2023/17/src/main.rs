@@ -5,13 +5,14 @@ also the path must not have more than 3 tiles in a straight line
 
 */
 
+use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-enum Direction {
+enum Dir {
     Up,
     Left,
     Down,
@@ -56,99 +57,46 @@ impl Coord {
             y: self.y,
         }
     }
-}
 
-struct Node {
-    cost: u16,
-    global_min_cost: u16,
-    global_min_cost_from_turn: Option<u16>,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-struct AStarNode {
-    current_node: Coord,
-    accumulated_cost: u16,
-    min_future_cost: u16,
-    total_estimate: u16,
-}
-
-impl AStarNode {
-    fn new(accumulated_cost: u16, min_future_cost: u16, current_node: Coord) -> Self {
-        let total_estimate = accumulated_cost + min_future_cost;
-
-        AStarNode {
-            accumulated_cost,
-            min_future_cost,
-            total_estimate,
-            current_node,
+    fn go_dir(&self, dir: Dir) -> Self {
+        match dir {
+            Dir::Up => self.up(),
+            Dir::Left => self.left(),
+            Dir::Down => self.down(),
+            Dir::Right => self.right(),
         }
     }
 }
 
-impl Ord for AStarNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other
-            .total_estimate
-            .cmp(&self.total_estimate)
-            .then_with(|| other.min_future_cost.cmp(&self.min_future_cost))
-    }
+struct Node {
+    cost: u16,
+    min_cost_1: u16,
+    min_cost_2: u16,
+    min_cost_3: u16,
 }
 
-impl PartialOrd for AStarNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+impl Node {
+    fn new(cost: u16) -> Self {
+        Node {
+            cost,
+            min_cost_1: u16::MAX,
+            min_cost_2: u16::MAX,
+            min_cost_3: u16::MAX,
+        }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 struct NodeSearcher {
     accumulated_cost: u16,
-    min_future_cost: u16,
-    total_estimate: u16,
     current_node: Coord,
-    visited_nodes_count: u16,
-    subsequent_unoptimal_count: u16,
-    prev_dirs: VecDeque<Direction>,
+    straigh_steps: u8,
+    facing_dir: Dir,
 }
 
-impl NodeSearcher {
-    fn new(
-        accumulated_cost: u16,
-        min_future_cost: u16,
-        current_node: Coord,
-        visited_nodes_count: u16,
-        prev_dirs: VecDeque<Direction>,
-    ) -> Self {
-        let total_estimate = accumulated_cost + min_future_cost;
-
-        NodeSearcher {
-            accumulated_cost,
-            min_future_cost,
-            total_estimate,
-            current_node,
-            visited_nodes_count,
-            subsequent_unoptimal_count: 0,
-            prev_dirs,
-        }
-    }
-
-    fn new_total_estimate(&mut self) {
-        self.total_estimate = self.accumulated_cost + self.min_future_cost;
-    }
-
-    fn add_direction(&mut self, new_dir: Direction) {
-        self.prev_dirs.push_back(new_dir);
-        if self.prev_dirs.len() > 3 {
-            self.prev_dirs.pop_front();
-        }
-    }
-}
 impl Ord for NodeSearcher {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other
-            .total_estimate
-            .cmp(&self.total_estimate)
-            .then_with(|| other.min_future_cost.cmp(&self.min_future_cost))
+        self.accumulated_cost.cmp(&other.accumulated_cost)
     }
 }
 
@@ -158,7 +106,51 @@ impl PartialOrd for NodeSearcher {
     }
 }
 
+impl NodeSearcher {
+    fn turn_left(&self) -> Self {
+        let new_dir = match self.facing_dir {
+            Dir::Up => Dir::Left,
+            Dir::Left => Dir::Down,
+            Dir::Down => Dir::Right,
+            Dir::Right => Dir::Up,
+        };
+
+        NodeSearcher {
+            accumulated_cost: self.accumulated_cost,
+            current_node: self.current_node,
+            straigh_steps: 0,
+            facing_dir: new_dir,
+        }
+    }
+
+    fn turn_right(&self) -> Self {
+        let new_dir = match self.facing_dir {
+            Dir::Up => Dir::Right,
+            Dir::Right => Dir::Down,
+            Dir::Down => Dir::Left,
+            Dir::Left => Dir::Up,
+        };
+
+        NodeSearcher {
+            accumulated_cost: self.accumulated_cost,
+            current_node: self.current_node,
+            straigh_steps: 0,
+            facing_dir: new_dir,
+        }
+    }
+    fn get_forward(&self) -> Coord {
+        self.current_node.go_dir(self.facing_dir)
+    }
+
+    fn step_into_node(&mut self, coords: Coord, node: &Node) {
+        self.accumulated_cost += node.cost;
+        self.current_node = coords;
+        self.straigh_steps += 1;
+    }
+}
+
 struct NumberGraph {
+    // TODO: IMPLEMENT A HASHMAP THAT CONSIDERS BOTH STEPS TAKEN AND APPROACH DIR TO SEE IF THE SEARCHER SHOULD BE DISCARDED
     cost_map: HashMap<Coord, Node>,
 }
 
@@ -167,250 +159,98 @@ impl NumberGraph {
         let mut cost_map: HashMap<Coord, Node> = HashMap::new();
 
         for (y, y_line) in input.iter().enumerate() {
-            for (x, x_char) in y_line.chars().enumerate() {
+            for (x, x_char) in y_line.char_indices() {
                 let num = x_char.to_digit(10).unwrap() as u16;
 
                 let current_coord = Coord {
                     x: x as i32,
                     y: y as i32,
                 };
-                cost_map.insert(
-                    current_coord,
-                    Node {
-                        cost: num,
-                        global_min_cost: u16::MAX / 2,
-                        global_min_cost_from_turn: None,
-                    },
-                );
+                cost_map.insert(current_coord, Node::new(num));
             }
         }
 
         NumberGraph { cost_map }
     }
 
-    fn normal_a_star_cost(&self, start: &Coord, end: &Coord) -> Option<u16> {
-        let mut heap: BinaryHeap<AStarNode> = BinaryHeap::new();
-        let mut cost_so_far: HashMap<Coord, u16> = HashMap::new();
+    fn max_3_in_row_djiksta(&mut self, start: Coord, end: Coord) -> Option<u16> {
+        // cost min heap
+        let mut searcher_heap: BinaryHeap<Reverse<NodeSearcher>> = BinaryHeap::new();
 
-        heap.push(AStarNode::new(
-            0,
-            self.get_min_dist_to_end(start, end),
-            *start,
-        ));
-        cost_so_far.insert(*start, 0);
+        searcher_heap.push(Reverse(NodeSearcher {
+            accumulated_cost: 0,
+            current_node: start,
+            straigh_steps: 0,
+            facing_dir: Dir::Right,
+        }));
 
-        while let Some(current_node) = heap.pop() {
-            let current_coord = current_node.current_node;
-
-            if current_coord == *end {
-                return Some(current_node.accumulated_cost);
-            }
-
-            let current_cost = cost_so_far[&current_coord];
-
-            macro_rules! process_direction {
-                ($new_coord:expr) => {
-                    if let Some(next_node) = self.cost_map.get(&$new_coord) {
-                        let new_cost = current_cost + next_node.cost as u16;
-
-                        if new_cost < *cost_so_far.get(&$new_coord).unwrap_or(&u16::MAX) {
-                            cost_so_far.insert($new_coord, new_cost);
-
-                            let min_future_cost = self.get_min_dist_to_end(&$new_coord, end);
-                            heap.push(AStarNode::new(new_cost, min_future_cost, $new_coord));
-                        }
-                    }
-                };
-            }
-
-            process_direction!(current_coord.up());
-            process_direction!(current_coord.right());
-            process_direction!(current_coord.down());
-            process_direction!(current_coord.left());
-        }
-
-        None // No path found
-    }
-
-    fn get_min_dist_to_end(&self, start: &Coord, end: &Coord) -> u16 {
-        let diff_x = end.x.abs_diff(start.x);
-        let diff_y = end.y.abs_diff(start.y);
-
-        (diff_x + diff_y) as u16
-    }
-
-    fn reduce_heap_size(
-        &self,
-        heap: BinaryHeap<NodeSearcher>,
-        size: usize,
-    ) -> BinaryHeap<NodeSearcher> {
-        let mut vec: Vec<NodeSearcher> = heap.into_vec();
-
-        //vec.sort();
-
-        //let culled: Vec<NodeSearcher> = vec.into_iter().rev().take(size).collect();
-
-        vec.sort_by(|a, b| {
-            // 993
-            //(a.accumulated_cost / a.visited_nodes_count + a.min_future_cost)
-            //    .cmp(&(b.accumulated_cost / b.visited_nodes_count + b.min_future_cost))
-
-            // 995
-            //(a.accumulated_cost as f32 / a.visited_nodes_count as f32 + (a.min_future_cost as f32))
-            //    .partial_cmp(
-            //        &(b.accumulated_cost as f32 / b.visited_nodes_count as f32
-            //            + (b.min_future_cost as f32)),
-            //    )
-            //    .unwrap()
-
-            // 1000 <
-            //a.accumulated_cost as f32 / a.visited_nodes_count as f32
-            //   + (a.min_future_cost as f32 * 0.2))
-            //   .partial_cmp(
-            //       &(b.accumulated_cost as f32 / b.visited_nodes_count as f32
-            //           + (b.min_future_cost as f32 * 0.2)),
-            //   )
-            //   .unwrap()
-
-            (a.total_estimate).cmp(&(b.total_estimate))
-        });
-        let culled: Vec<NodeSearcher> = vec.into_iter().take(size).collect();
-
-        BinaryHeap::from(culled)
-    }
-
-    fn can_go_direction(previous_dirs: &VecDeque<Direction>, current_dir: Direction) -> bool {
-        if previous_dirs.len() < 3 {
-            return true;
-        }
-
-        let prev_dir = previous_dirs.back().unwrap();
-        match (prev_dir, current_dir) {
-            (Direction::Up, Direction::Down) => return false,
-            (Direction::Right, Direction::Left) => return false,
-            (Direction::Down, Direction::Up) => return false,
-            (Direction::Left, Direction::Right) => return false,
-            (_, _) => {} // pass
-        }
-
-        !previous_dirs.iter().all(|&d| d == current_dir)
-    }
-
-    fn max_3_in_row_a_star(&mut self, start: Coord, end: Coord) -> Option<u16> {
-        let mut heap: BinaryHeap<NodeSearcher> = BinaryHeap::new();
-        let mut cost_cache: HashMap<Coord, u16> = HashMap::new();
-
-        heap.push(NodeSearcher::new(
-            0,
-            self.normal_a_star_cost(&start, &end).unwrap(),
-            start,
-            1,
-            VecDeque::new(),
-        ));
-
-        let mut counter = 0;
-
-        while let Some(searcher) = heap.pop() {
+        while let Some(min_dist_searcher) = searcher_heap.pop() {
+            let mut searcher = min_dist_searcher.0;
             if searcher.current_node == end {
-                //for c in searcher.visited_nodes {
-                //    println!("{}, {}", c.x, c.y);
-                //}
                 return Some(searcher.accumulated_cost);
             }
-            counter += 1;
-            if counter % 10_000_000 == 0 {
-                dbg!(&heap.len());
-            }
-            //let heap_len = heap.len();
-            //const PRINT_COUNT: usize = 2_000;
-            //if heap_len < PRINT_COUNT {
-            //    dbg!(&heap_len);
-            //}
 
-            // cull the heap to make sure it doesnt get too large
-            if heap.len() > 20_000_000 {
-                dbg!("culling");
-                heap = self.reduce_heap_size(heap, 16_000_000);
+            let mut right_searcher = searcher.turn_right();
+            let next_right_coords = right_searcher.get_forward();
+            if let Some(right_node) = self.cost_map.get_mut(&next_right_coords) {
+                right_searcher.step_into_node(next_right_coords, right_node);
+
+                if Self::can_continue(right_node, &right_searcher) {
+                    searcher_heap.push(Reverse(right_searcher));
+                }
             }
 
-            if searcher.subsequent_unoptimal_count > 5 {
-                continue;
+            let mut left_searcher = searcher.turn_left();
+
+            let next_left_coords = left_searcher.get_forward();
+            if let Some(left_node) = self.cost_map.get_mut(&next_left_coords) {
+                left_searcher.step_into_node(next_left_coords, left_node);
+
+                if Self::can_continue(left_node, &left_searcher) {
+                    searcher_heap.push(Reverse(left_searcher));
+                }
             }
 
-            let current_coord = searcher.current_node;
+            let next_straight_coords = searcher.get_forward();
+            if let Some(straight_node) = self.cost_map.get_mut(&next_straight_coords) {
+                searcher.step_into_node(next_straight_coords, straight_node);
 
-            macro_rules! process_direction {
-                ($direction:expr, $new_coord:expr) => {
-                    if let Some(next_node) = self.cost_map.get_mut(&$new_coord) {
-                        if NumberGraph::can_go_direction(&searcher.prev_dirs, $direction) {
-                            let new_cost = searcher.accumulated_cost + next_node.cost as u16;
-                            let mut should_continue = true;
-
-                            if let Some(&prev_dir) = searcher.prev_dirs.back() {
-                                let has_turned = prev_dir != $direction;
-
-                                if has_turned {
-                                    if let Some(prev_turn_cost) =
-                                        next_node.global_min_cost_from_turn
-                                    {
-                                        if prev_turn_cost < new_cost {
-                                            should_continue = false;
-                                        }
-                                    } else {
-                                        next_node.global_min_cost_from_turn = Some(new_cost);
-                                    }
-                                }
-                            }
-
-                            if new_cost < (next_node.global_min_cost + 10) && should_continue {
-                                let mut new_searcher = searcher.clone();
-
-                                if new_cost <= next_node.global_min_cost {
-                                    next_node.global_min_cost = new_cost;
-                                    new_searcher.subsequent_unoptimal_count = 0;
-                                } else {
-                                    new_searcher.subsequent_unoptimal_count += 1;
-                                }
-
-                                new_searcher.current_node = $new_coord;
-                                new_searcher.accumulated_cost = new_cost;
-
-                                let mut new_cost = false;
-                                new_searcher.min_future_cost = match cost_cache.get(&$new_coord) {
-                                    Some(cost) => *cost,
-                                    None => {
-                                        new_cost = true;
-                                        self.normal_a_star_cost(&$new_coord, &end).unwrap()
-                                    }
-                                };
-
-                                if new_cost {
-                                    cost_cache.insert($new_coord, new_searcher.min_future_cost);
-                                }
-
-                                new_searcher.new_total_estimate();
-
-                                new_searcher.add_direction($direction);
-                                //new_searcher.visited_nodes.push_back($new_coord);
-                                new_searcher.visited_nodes_count += 1;
-
-                                heap.push(new_searcher);
-                            }
-                        }
-                    }
-                };
+                if Self::can_continue(straight_node, &searcher) {
+                    searcher_heap.push(Reverse(searcher));
+                }
             }
-
-            process_direction!(Direction::Up, current_coord.up());
-
-            process_direction!(Direction::Right, current_coord.right());
-
-            process_direction!(Direction::Down, current_coord.down());
-
-            process_direction!(Direction::Left, current_coord.left());
         }
 
         None
+    }
+
+    fn can_continue(next_node: &mut Node, searcher: &NodeSearcher) -> bool {
+        match searcher.straigh_steps {
+            1 => {
+                if next_node.min_cost_1 < searcher.accumulated_cost {
+                    return false;
+                }
+                next_node.min_cost_1 = searcher.accumulated_cost;
+            }
+            2 => {
+                if next_node.min_cost_2 < searcher.accumulated_cost {
+                    return false;
+                }
+                next_node.min_cost_2 = searcher.accumulated_cost;
+            }
+            3 => {
+                if next_node.min_cost_3 < searcher.accumulated_cost {
+                    return false;
+                }
+                next_node.min_cost_3 = searcher.accumulated_cost;
+            }
+            4 => {
+                return false;
+            }
+            _ => unreachable!(),
+        }
+
+        true
     }
 }
 
@@ -427,10 +267,13 @@ fn part_1(_my_input: &[String]) {
 
     let start = Instant::now();
     let example_heatloss = get_min_heatloss_1(&example_1);
+    assert_eq!(example_heatloss, 102);
     dbg!(start.elapsed());
     dbg!(&example_heatloss);
 
+    let start = Instant::now();
     let my_heatloss = get_min_heatloss_1(_my_input);
+    dbg!(start.elapsed());
     assert_eq!(my_heatloss, 1008);
     dbg!(my_heatloss);
 }
@@ -449,7 +292,7 @@ fn get_min_heatloss_1(input: &[String]) -> u16 {
 
     //dbg!(end_node);
 
-    graph.max_3_in_row_a_star(start_node, end_node).unwrap()
+    graph.max_3_in_row_djiksta(start_node, end_node).unwrap()
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
