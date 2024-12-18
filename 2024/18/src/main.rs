@@ -5,12 +5,16 @@ we have to find the exit when 1024 byts have fallen onto the grid
 
 part 2:
 
+we have to see how many blocks can fall until all paths are blocked and we have to return the coords for the final block
+that blocks the path
+
 */
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum Dir {
@@ -144,7 +148,9 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_coords);
     assert_eq!(example_coords, "6,1");
 
+    let start = Instant::now();
     let my_coords = first_byte_to_block_exit(_my_input, Coord { x: 70, y: 70 });
+    dbg!(start.elapsed());
     dbg!(my_coords);
 }
 
@@ -190,14 +196,19 @@ fn min_steps_till_exit(input: &[String], byte_count: usize, end_coord: Coord) ->
 }
 
 fn first_byte_to_block_exit(input: &[String], end_coord: Coord) -> String {
-    for len in 1..input.len() {
+    let mut min = 1;
+    let mut max = input.len();
+    while min != max {
+        let middle = (min + max) / 2;
         // count
-        if min_steps_till_exit(input, len, end_coord).is_none() {
-            return input[len - 1].clone(); // index (count - 1)
+        if min_steps_till_exit(input, middle, end_coord).is_none() {
+            max = middle;
+        } else {
+            min = middle + 1;
         }
     }
 
-    "".to_owned()
+    input[min - 1].clone()
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
