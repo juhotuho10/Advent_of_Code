@@ -164,6 +164,8 @@ fn min_steps_till_exit(input: &[String], byte_count: usize, end_coord: Coord) ->
         current_node: Coord { x: 0, y: 0 },
     };
 
+    grid.cost_map.insert(Coord { x: 0, y: 0 }, 0);
+
     cost_heap.push(Reverse(start_searcher));
 
     while let Some(rev_searcher) = cost_heap.pop() {
@@ -173,21 +175,17 @@ fn min_steps_till_exit(input: &[String], byte_count: usize, end_coord: Coord) ->
             return Some(searcher.accumulated_cost);
         }
 
-        let grid_cost = grid.cost_map.get_mut(&searcher.current_node).unwrap();
-
-        if searcher.accumulated_cost >= *grid_cost {
-            continue;
-        }
-
-        *grid_cost = searcher.accumulated_cost;
-
         for dir in [Dir::Up, Dir::Right, Dir::Down, Dir::Left] {
             let new_coord = searcher.current_node.go_dir(dir);
-            if grid.cost_map.contains_key(&new_coord) {
+            if let Some(cost) = grid.cost_map.get_mut(&new_coord) {
                 let mut copy_searcher = searcher.clone();
                 copy_searcher.current_node = new_coord;
-                copy_searcher.accumulated_cost += 1;
-                cost_heap.push(Reverse(copy_searcher));
+                let new_cost = copy_searcher.accumulated_cost + 1;
+                if new_cost < *cost {
+                    *cost = new_cost;
+                    copy_searcher.accumulated_cost = new_cost;
+                    cost_heap.push(Reverse(copy_searcher));
+                }
             }
         }
     }
