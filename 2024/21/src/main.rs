@@ -217,6 +217,8 @@ fn common_djikstra(
 }
 
 fn recursive_keypad_pusher(
+    use_numpad: bool,
+    numpad: &HashMap<Coord, char>,
     keypad: &HashMap<Coord, char>,
     input: Vec<char>,
     robots: u16,
@@ -234,7 +236,11 @@ fn recursive_keypad_pusher(
     let mut total_presses = 0;
 
     for key_pair in input.windows(2) {
-        let new_directions = common_djikstra(djikstra_cache, keypad, &key_pair[0], &key_pair[1]);
+        let new_directions = if use_numpad {
+            common_djikstra(djikstra_cache, numpad, &key_pair[0], &key_pair[1])
+        } else {
+            common_djikstra(djikstra_cache, keypad, &key_pair[0], &key_pair[1])
+        };
 
         let mut min_presses = u64::MAX;
 
@@ -244,6 +250,8 @@ fn recursive_keypad_pusher(
             press_sequence.push('A');
 
             let total_key_persses = recursive_keypad_pusher(
+                false,
+                numpad,
                 keypad,
                 press_sequence,
                 robots - 1,
@@ -297,37 +305,15 @@ fn min_keypresses(input: &[String], robot_count: u16) -> u64 {
         let mut input_chars: Vec<char> = keypad.chars().collect();
         input_chars.insert(0, 'A');
 
-        let mut total_presses = 0;
-
-        for key_pair in input_chars.windows(2) {
-            let new_directions = common_djikstra(
-                &mut djikstra_cache,
-                &Numpad::new().numpad,
-                &key_pair[0],
-                &key_pair[1],
-            );
-            let mut min_presses = u64::MAX;
-
-            for new_dirs in new_directions {
-                let mut press_sequence = vec!['A'];
-                press_sequence.extend(new_dirs);
-                press_sequence.push('A');
-
-                let key_presses = recursive_keypad_pusher(
-                    &Keypad::new().keypad,
-                    press_sequence,
-                    robot_count - 1,
-                    &mut djikstra_cache,
-                    &mut input_cache,
-                );
-
-                min_presses = min_presses.min(key_presses)
-            }
-
-            total_presses += min_presses;
-        }
-
-        dbg!(total_presses);
+        let total_presses = recursive_keypad_pusher(
+            true,
+            &Numpad::new().numpad,
+            &Keypad::new().keypad,
+            input_chars,
+            robot_count,
+            &mut djikstra_cache,
+            &mut input_cache,
+        );
 
         total += total_presses * keypad_num;
     }
