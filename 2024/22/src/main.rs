@@ -16,11 +16,14 @@ we have to find the best 4 len difference sequence in the price to tell the monk
 
 */
 
+use fxhash::{FxHashMap, FxHashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 struct SecretNum {
     num: i64,
+    seq_value: FxHashMap<[i8; 4], u8>,
     price: Vec<u8>,
     diff: Vec<i8>,
 }
@@ -29,6 +32,7 @@ impl SecretNum {
     fn from_string(input: &str) -> Self {
         SecretNum {
             num: input.parse().unwrap(),
+            seq_value: FxHashMap::default(),
             price: vec![],
             diff: vec![],
         }
@@ -71,6 +75,17 @@ impl SecretNum {
     fn prune(current: &mut i64) {
         *current %= 16777216;
     }
+
+    fn populate_seq_values(&mut self) {
+        for (i, diff_seq) in self.diff.windows(4).enumerate() {
+            if !self.seq_value.contains_key(diff_seq) {
+                let index = i + 3;
+                let current_price = self.price[index];
+                let key: [i8; 4] = diff_seq.try_into().unwrap();
+                self.seq_value.insert(key, current_price);
+            }
+        }
+    }
 }
 
 fn main() {
@@ -100,7 +115,9 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, 23);
 
+    let start = Instant::now();
     let my_sum = find_best_buying_sequence(_my_input);
+    dbg!(start.elapsed());
     dbg!(my_sum);
 }
 
@@ -123,34 +140,25 @@ fn find_best_buying_sequence(input: &[String]) -> u32 {
 
     for secret in secret_nums.iter_mut() {
         secret.recursive_secret_num_finder(secret.num, 2000);
+        secret.populate_seq_values();
     }
+
+    let all_existing_sequences: FxHashSet<&[i8; 4]> = secret_nums
+        .iter()
+        .flat_map(|secret| secret.seq_value.keys())
+        .collect();
 
     let mut best_banana_count: u32 = 0;
 
-    // inneficcient but works well for this scenario
-    for diff_1 in -9..=9 {
-        for diff_2 in -9..=9 {
-            for diff_3 in -9..=9 {
-                for diff_4 in -9..=9 {
-                    let diffs = [diff_1, diff_2, diff_3, diff_4];
-
-                    let mut current_bananas: u32 = 0;
-
-                    for secret in &secret_nums {
-                        for (i, diff_seq) in secret.diff.windows(4).enumerate() {
-                            if diff_seq == diffs {
-                                let index = i + 3;
-                                let current_price = secret.price[index];
-                                current_bananas += current_price as u32;
-                                break;
-                            }
-                        }
-                    }
-
-                    best_banana_count = best_banana_count.max(current_bananas)
-                }
+    for possible_seq in all_existing_sequences {
+        let mut seq_bananas: u32 = 0;
+        for secret in &secret_nums {
+            if let Some(&banana_count) = secret.seq_value.get(possible_seq) {
+                seq_bananas += banana_count as u32
             }
         }
+
+        best_banana_count = best_banana_count.max(seq_bananas)
     }
 
     best_banana_count
