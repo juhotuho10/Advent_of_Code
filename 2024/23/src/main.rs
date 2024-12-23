@@ -12,8 +12,10 @@ and return those IDs as a string in alphabetical order
 */
 
 use fxhash::{FxHashMap, FxHashSet};
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 #[derive(Debug)]
 struct Connections {
@@ -100,7 +102,9 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, "co,de,ka,ta");
 
+    let start = Instant::now();
     let my_sum = largest_connected_group_2(_my_input);
+    dbg!(start.elapsed());
     dbg!(my_sum);
 }
 
@@ -128,7 +132,9 @@ fn largest_connected_group_2(input: &[String]) -> String {
     let mut largest_connection = vec![];
     let mut largest_connection_count = 0;
 
-    for pc in original_connections.connected.keys() {
+    let mut all_ids: VecDeque<&String> = original_connections.connected.keys().collect();
+
+    while let Some(pc) = all_ids.pop_front() {
         let all_connected = original_connections.connected[pc].clone();
 
         let mut connection_connections: Vec<String> = all_connected
@@ -144,9 +150,16 @@ fn largest_connected_group_2(input: &[String]) -> String {
             *count_map.entry(conenction).or_insert(0) += 1;
         }
 
+        let mut unique: Vec<&usize> = count_map
+            .values()
+            .collect::<FxHashSet<&usize>>()
+            .into_iter()
+            .collect();
+        unique.sort();
+
         let mut current_connections: Vec<String> = vec![];
         let mut most_current_connections = 0;
-        for i in 2..100 {
+        for &i in unique {
             let connections: Vec<(&String, &usize)> =
                 count_map.iter().filter(|(_, count)| **count >= i).collect();
 
@@ -157,6 +170,8 @@ fn largest_connected_group_2(input: &[String]) -> String {
                     most_current_connections = i;
                 }
             } else {
+                all_ids.retain(|id| !current_connections.contains(id));
+
                 break;
             }
         }
