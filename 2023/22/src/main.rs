@@ -61,7 +61,7 @@ impl Arena {
         &self,
         start: &Coord,
         end: &Coord,
-    ) -> ndarray::ArrayBase<ndarray::ViewRepr<&i16>, Dim<[usize; 3]>> {
+    ) -> ndarray::ArrayBase<ndarray::ViewRepr<&ID>, Dim<[usize; 3]>> {
         self.blocks.slice(s![
             (start.x as usize)..=(end.x as usize),
             (start.y as usize)..=(end.y as usize),
@@ -69,7 +69,7 @@ impl Arena {
         ])
     }
 
-    fn get_blocks_mut(&mut self, start: &Coord, end: &Coord) -> ArrayViewMut3<i16> {
+    fn get_blocks_mut(&mut self, start: &Coord, end: &Coord) -> ArrayViewMut3<ID> {
         self.blocks.slice_mut(s![
             (start.x as usize)..=(end.x as usize),
             (start.y as usize)..=(end.y as usize),
@@ -197,7 +197,7 @@ fn solution_1(input: &[String]) -> u32 {
 
     // there are 2 ways the pillar is safe to disintegrage:
     //  1. the pillar isnt supporting any other pillars
-    //  2. the piller that is ontop is supported by multiple pillars
+    //  2. all the pillars that are ontop are supported by multiple pillars
 
     pillars.sort_by_key(|pillar| (pillar.start.y).min(pillar.end.y));
 
@@ -241,7 +241,7 @@ fn parse_input(input: &[String]) -> (Vec<Pillar>, Arena) {
     let mut pillars: Vec<Pillar> = input
         .iter()
         .enumerate()
-        .map(|(id, line)| Pillar::from_string(line, id as i16))
+        .map(|(id, line)| Pillar::from_string(line, id as ID))
         .collect();
 
     let mut max_x = 0;
