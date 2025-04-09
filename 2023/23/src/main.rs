@@ -4,10 +4,12 @@ we have a path with slopes, and we need to determine the longest path possible
 there are only single lane paths and no ways to have a roundabout route
 
 part 2:
-
+now we treat all paths as walkable and there can be roundabouts, we cannot walk the same path twice
+we have to find the longest path
 */
 
 use fxhash::FxHashMap;
+use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -52,13 +54,7 @@ impl Coord {
     }
 
     fn get_surrounding(&self) -> [Coord; 4] {
-        let (x, y) = (self.x, self.y);
-        [
-            Coord::new(x, y - 1), // up
-            Coord::new(x + 1, y), // left
-            Coord::new(x, y + 1), // down
-            Coord::new(x - 1, y), // right
-        ]
+        [self.up(), self.left(), self.down(), self.right()]
     }
 
     fn get_dir(&self, dir: &Dir) -> Coord {
@@ -76,7 +72,7 @@ struct Trails {
 }
 
 impl Trails {
-    fn from_string(input: &[String]) -> Trails {
+    fn from_string_1(input: &[String]) -> Trails {
         let mut trail: FxHashMap<Coord, Path> = FxHashMap::default();
 
         for (y, y_line) in input.iter().enumerate() {
@@ -98,6 +94,24 @@ impl Trails {
         Trails { trail_map: trail }
     }
 
+    fn from_string_2(input: &[String]) -> Trails {
+        let mut trail: FxHashMap<Coord, Path> = FxHashMap::default();
+
+        for (y, y_line) in input.iter().enumerate() {
+            for (x, x_char) in y_line.char_indices() {
+                let path_type = match x_char {
+                    '#' => continue,
+                    '.' | '^' | '>' | 'v' | '<' => Path::Normal,
+                    _ => unreachable!("parsing err"),
+                };
+
+                trail.insert(Coord::new(x as u8, y as u8), path_type);
+            }
+        }
+
+        Trails { trail_map: trail }
+    }
+
     fn get_start_and_finish(&self) -> (Coord, Coord) {
         let start = *self.trail_map.keys().min_by_key(|c| c.y).unwrap();
         let end = *self.trail_map.keys().max_by_key(|c| c.y).unwrap();
@@ -105,37 +119,70 @@ impl Trails {
         (start, end)
     }
 
-    fn longest_path_search(&self, start: Coord, end: Coord) -> u32 {
+    fn longest_path_search(&self, start: Coord, end: Coord) -> u16 {
         assert!(start < end);
-        self.recursive_search(1, start, start.down(), end).unwrap()
+
+        self.recursive_search(1, start, start.down(), vec![], end)
+            .unwrap()
     }
 
     fn recursive_search(
         &self,
-        total: u32,
-        came_from: Coord,
-        current: Coord,
+        mut total: u16,
+        mut came_from: Coord,
+        mut current: Coord,
+        mut visited_intersections: Vec<Coord>,
         end_coord: Coord,
-    ) -> Option<u32> {
-        if current == end_coord {
-            return Some(total);
-        }
+    ) -> Option<u16> {
+        let multiple_paths: Vec<Coord>;
+        loop {
+            if current == end_coord {
+                return Some(total);
+            }
+            let path_type = self.trail_map.get(&current).unwrap();
 
-        if let Some(char) = self.trail_map.get(&current) {
-            let mut all_next_paths: Vec<Coord> = match char {
+            let mut all_next_paths: Vec<Coord> = match path_type {
                 Path::Normal => current.get_surrounding().into_iter().collect(),
                 Path::Dir(dir) => vec![current.get_dir(dir)],
             };
-            all_next_paths.retain(|&coord| coord != came_from);
 
             all_next_paths
-                .iter()
-                .filter_map(|&next_coord| {
-                    self.recursive_search(total + 1, current, next_coord, end_coord)
+                .retain(|&coord| coord != came_from && self.trail_map.contains_key(&coord));
+
+            match all_next_paths.as_slice() {
+                [] => return None,
+                // normal path
+                [next_coord] => {
+                    total += 1;
+                    came_from = current;
+                    current = *next_coord;
+                    continue;
+                }
+
+                // intersection
+                _multiple => {
+                    multiple_paths = all_next_paths;
+                    break;
+                }
+            }
+        }
+
+        if visited_intersections.contains(&current) {
+            None
+        } else {
+            visited_intersections.push(current);
+            multiple_paths
+                .par_iter()
+                .flat_map(|next_coord| {
+                    self.recursive_search(
+                        total + 1,
+                        current,
+                        *next_coord,
+                        visited_intersections.clone(),
+                        end_coord,
+                    )
                 })
                 .max()
-        } else {
-            None
         }
     }
 
@@ -191,26 +238,24 @@ fn part_2(_my_input: &[String]) {
 
     let example_sum = solution_2(&example_2);
     dbg!(&example_sum);
-    assert_eq!(example_sum, 0);
+    assert_eq!(example_sum, 154);
 
     let my_sum = solution_2(_my_input);
     dbg!(my_sum);
 }
 
 fn solution_1(input: &[String]) -> u32 {
-    let trails = parse_input(input);
+    let trails = Trails::from_string_1(input);
     trails.debug_print();
     let (start, end) = trails.get_start_and_finish();
-    trails.longest_path_search(start, end)
+    trails.longest_path_search(start, end) as u32
 }
 
 fn solution_2(input: &[String]) -> u32 {
-    let parsed = parse_input(input);
-    0
-}
-
-fn parse_input(input: &[String]) -> Trails {
-    Trails::from_string(input)
+    let trails = Trails::from_string_2(input);
+    trails.debug_print();
+    let (start, end) = trails.get_start_and_finish();
+    trails.longest_path_search(start, end) as u32
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
