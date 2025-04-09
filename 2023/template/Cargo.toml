@@ -1,4 +1,4 @@
 [package]
-edition = "2021"
+edition = "2024"
 name = "Advent-of-Code"
 version = "0.1.0"
