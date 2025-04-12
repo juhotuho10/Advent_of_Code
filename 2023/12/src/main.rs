@@ -34,11 +34,17 @@ becomes:
 
 */
 
+use rayon::prelude::*;
 use regex::Regex;
+use std::clone;
 use std::fs::File;
 
-use std::io::{BufRead, BufReader};
-use std::mem::discriminant;
+use std::{
+    io::{BufRead, BufReader},
+    iter::repeat_n,
+    mem::discriminant,
+    time::Instant,
+};
 
 #[derive(Debug, Clone, Copy)]
 enum Condition {
@@ -49,15 +55,15 @@ enum Condition {
 
 impl PartialEq for Condition {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Condition::Good, Condition::Idk) | (Condition::Idk, Condition::Good) => true,
-            (Condition::Bad, Condition::Idk) | (Condition::Idk, Condition::Bad) => true,
-
-            _ => discriminant(self) == discriminant(other),
-        }
+        matches!(
+            (self, other),
+            (Condition::Good, Condition::Good)
+                | (Condition::Bad, Condition::Bad)
+                | (Condition::Idk, _)
+                | (_, Condition::Idk)
+        )
     }
 }
-
 #[derive(Debug, Clone)]
 struct Spring {
     arrangement_str: String,
@@ -92,14 +98,12 @@ impl Spring {
     fn from_string_2(input: String) -> Self {
         let (arrangement_str, broken_str) = input.split_once(" ").unwrap();
 
-        let count_multiplier = 3;
-        let arrangement_str: String = std::iter::repeat(arrangement_str)
-            .take(count_multiplier)
+        let count_multiplier = 5;
+        let arrangement_str: String = repeat_n(arrangement_str, count_multiplier)
             .collect::<Vec<_>>()
             .join("?");
 
-        let broken_str: String = std::iter::repeat(broken_str)
-            .take(count_multiplier)
+        let broken_str: String = repeat_n(broken_str, count_multiplier)
             .collect::<Vec<_>>()
             .join(",");
 
@@ -127,38 +131,42 @@ impl Spring {
         }
     }
 
-    fn valid_combination_count(&self) -> u32 {
-        let all_combinations = Self::get_all_combinations(self);
-
-        dbg!(all_combinations.len());
-
-        all_combinations
-            .iter()
-            .map(|comb| Self::translate_combination(self, comb))
-            .filter(|combination| {
-                combination
-                    .iter()
-                    .zip(self.conditions.iter())
-                    .all(|(other_cond, self_cond)| other_cond == self_cond)
-            })
-            .count() as u32
-    }
-
     fn translate_combination(&self, combination: &[u32]) -> Vec<Condition> {
-        let mut sprint_conditions: Vec<Condition> = vec![Condition::Good; combination[0] as usize];
+        let total_size: usize = combination
+            .iter()
+            .map(|&count| count as usize)
+            .sum::<usize>()
+            + self
+                .broken
+                .iter()
+                .map(|&count| count as usize)
+                .sum::<usize>();
+
+        let mut sprint_conditions = Vec::with_capacity(total_size);
+
+        // Add initial good conditions, this is done because there is one more good than there is bad
+        sprint_conditions.resize(combination[0] as usize, Condition::Good);
 
         for (bad_count, good_count) in self.broken.iter().zip(&combination[1..]) {
-            let bad = vec![Condition::Bad; *bad_count as usize];
-            sprint_conditions.extend_from_slice(&bad);
-
-            let good = vec![Condition::Good; *good_count as usize];
-            sprint_conditions.extend_from_slice(&good);
+            sprint_conditions.resize(
+                sprint_conditions.len() + *bad_count as usize,
+                Condition::Bad,
+            );
+            sprint_conditions.resize(
+                sprint_conditions.len() + *good_count as usize,
+                Condition::Good,
+            );
         }
 
         sprint_conditions
     }
 
+    fn is_valid_comb(&self, combination: &[u32]) -> bool {
+        let translate_comb = self.translate_combination(combination);
+        self.conditions.starts_with(&translate_comb)
+    }
     fn max_possible_good(&self) -> u32 {
+        // gets the max good tiles in a row
         let mut max_count = 0;
         let mut current_count = 0;
 
@@ -170,7 +178,7 @@ impl Spring {
                         max_count = current_count;
                     }
                 }
-                _ => {
+                Condition::Bad => {
                     current_count = 0;
                 }
             }
@@ -179,7 +187,7 @@ impl Spring {
         max_count
     }
 
-    fn get_all_combinations(&self) -> Vec<Vec<u32>> {
+    fn valid_combination_count(&self) -> u64 {
         let spring_len = self.conditions.len();
         let broken_len: usize = self.broken.len();
         let total_broken: u32 = self.broken.iter().sum();
@@ -191,45 +199,43 @@ impl Spring {
         min_values.push(0);
 
         let mut current = min_values.clone();
-        let mut results = Vec::new();
-        Self::new_combinations(
-            &min_values,
-            &mut current,
-            0,
-            total_good,
-            max_value,
-            &mut results,
-        );
 
-        results
+        self.new_combinations(&min_values, &mut current, 0, total_good, max_value)
     }
 
     fn new_combinations(
+        &self,
         min_values: &Vec<u32>,
         current: &mut Vec<u32>,
         index: usize,
         target_sum: u32,
         max_value: u32,
-        results: &mut Vec<Vec<u32>>,
-    ) {
+    ) -> u64 {
         if index == current.len() {
-            if current.iter().sum::<u32>() == target_sum {
-                results.push(current.clone());
-            }
-            return;
+            return u64::from(
+                // bool as u64
+                current.iter().sum::<u32>() == target_sum,
+            );
         }
+
+        let mut sum = 0;
+
+        let mut found_valid = false;
 
         for value in min_values[index]..=max_value {
             current[index] = value;
-            Self::new_combinations(
-                min_values,
-                current,
-                index + 1,
-                target_sum,
-                max_value,
-                results,
-            );
+            if !self.is_valid_comb(&current[..=index]) {
+                if found_valid {
+                    return sum;
+                } else {
+                    continue;
+                }
+            }
+            found_valid = true;
+            sum += self.new_combinations(min_values, current, index + 1, target_sum, max_value);
         }
+
+        sum
     }
 }
 
@@ -256,7 +262,9 @@ fn part_2(_my_input: &[String]) {
     let example_2 = read_file("example_2.txt");
     dbg!(&example_2);
 
+    let start = Instant::now();
     let example_arrangements = get_num_arrangements_2(&example_2);
+    dbg!(start.elapsed().as_millis());
     dbg!(&example_arrangements);
     assert_eq!(example_arrangements, 525152);
 
@@ -264,20 +272,20 @@ fn part_2(_my_input: &[String]) {
     //dbg!(my_arrangements);
 }
 
-fn get_num_arrangements_1(input: &[String]) -> u32 {
+fn get_num_arrangements_1(input: &[String]) -> u64 {
     let springs = parse_input_1(input);
 
     springs
-        .iter()
+        .par_iter()
         .map(|spring| spring.valid_combination_count())
         .sum()
 }
 
-fn get_num_arrangements_2(input: &[String]) -> u32 {
+fn get_num_arrangements_2(input: &[String]) -> u64 {
     let springs = parse_input_2(input);
 
     springs
-        .iter()
+        .par_iter()
         .map(|spring| spring.valid_combination_count())
         .sum()
 }
