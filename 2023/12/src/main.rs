@@ -162,62 +162,6 @@ impl Spring {
         }
     }
 
-    fn translate_combination(&self, combination: &[u32]) -> Vec<Condition> {
-        let total_size: usize = combination
-            .iter()
-            .map(|&count| count as usize)
-            .sum::<usize>()
-            + self
-                .broken
-                .iter()
-                .map(|&count| count as usize)
-                .sum::<usize>();
-
-        let mut sprint_conditions = Vec::with_capacity(total_size);
-
-        // Add initial good conditions, this is done because there is one more good than there is bad
-        sprint_conditions.resize(combination[0] as usize, Condition::Good);
-
-        for (bad_count, good_count) in self.broken.iter().zip(&combination[1..]) {
-            sprint_conditions.resize(
-                sprint_conditions.len() + *bad_count as usize,
-                Condition::Bad,
-            );
-            sprint_conditions.resize(
-                sprint_conditions.len() + *good_count as usize,
-                Condition::Good,
-            );
-        }
-
-        sprint_conditions
-    }
-
-    fn is_valid_comb(&self, combination: &[u32]) -> bool {
-        let translate_comb = self.translate_combination(combination);
-        Condition::fits_pattern(&self.conditions, &translate_comb).unwrap_or(false)
-    }
-    fn max_possible_good(&self) -> u32 {
-        // gets the max good tiles in a row
-        let mut max_count = 0;
-        let mut current_count = 0;
-
-        for condition in &self.conditions {
-            match condition {
-                Condition::Good | Condition::Idk => {
-                    current_count += 1;
-                    if current_count > max_count {
-                        max_count = current_count;
-                    }
-                }
-                Condition::Bad => {
-                    current_count = 0;
-                }
-            }
-        }
-
-        max_count
-    }
-
     fn valid_combination_count_2(&self) -> u64 {
         // {3, 2, 1}
         // ????.???.??
@@ -256,12 +200,11 @@ impl Spring {
 
         let starting_point = Self::find_next_valid(&modified_conditions, &self.broken[0]).unwrap();
 
-        Self::recursive_combination_search(1, &mut memo, starting_point, &self.broken)
+        Self::recursive_combination_search(&mut memo, starting_point, &self.broken)
             .unwrap_or_else(|| panic!("failed the current file: {:?}", self.arrangement_str))
     }
 
     fn recursive_combination_search<'a>(
-        recursion_num: u8,
         memo: &mut FxHashMap<(&'a [Condition], &'a [u8]), Option<u64>>,
         conditions: &'a [Condition],
         broken: &'a [u8],
@@ -303,7 +246,6 @@ impl Spring {
                         // we can safely go into the next recursion cycle
                         Some(next_index) => match Self::find_next_valid(next_skip, next_index) {
                             Some(next_valid_starting_point) => Self::recursive_combination_search(
-                                recursion_num + 1,
                                 memo,
                                 next_valid_starting_point,
                                 &broken[1..],
