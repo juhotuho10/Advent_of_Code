@@ -230,6 +230,9 @@ impl Spring {
         // -> going forward ->
         // ?? {2,1} no longer viable because there is no space to fit all of them
         //          so we return an error / none from this state to indicate to the last one to stop going forward
+        // if we step forward from the known unknow, we return early to stop going forward since there is no viable
+        // way to have the current row go forward without the result being invalid
+        // for example known: #???. and known: .###. would always be invalid
 
         // big picture algorithm
         // 1. setup everything
@@ -253,13 +256,8 @@ impl Spring {
 
         let starting_point = Self::find_next_valid(&modified_conditions, &self.broken[0]).unwrap();
 
-        let result = Self::recursive_combination_search(1, &mut memo, starting_point, &self.broken);
-
-        if result.is_none() {
-            println!("failed the current file: {:?}", self.arrangement_str);
-        }
-
-        result.unwrap()
+        Self::recursive_combination_search(1, &mut memo, starting_point, &self.broken)
+            .unwrap_or_else(|| panic!("failed the current file: {:?}", self.arrangement_str))
     }
 
     fn recursive_combination_search<'a>(
@@ -302,6 +300,7 @@ impl Spring {
                     let next_skip = &current_cond[skip_dist..];
 
                     let next_val = match &broken.get(1) {
+                        // we can safely go into the next recursion cycle
                         Some(next_index) => match Self::find_next_valid(next_skip, next_index) {
                             Some(next_valid_starting_point) => Self::recursive_combination_search(
                                 recursion_num + 1,
@@ -309,10 +308,12 @@ impl Spring {
                                 next_valid_starting_point,
                                 &broken[1..],
                             ),
-                            None => None,
+                            None => None, // we fail before finding a new valid stop
                         },
+                        // there would be no broken pieces in the next iteration
                         None => {
                             if next_skip.contains(&Condition::Bad) {
+                                // the next iteration would be invalid
                                 //println!("{recursion_num} next would have failed");
                                 None
                             } else {
@@ -374,59 +375,7 @@ impl Spring {
         condition[1..(*size as usize + 1)].fill(Condition::Bad);
         condition
     }
-
-    fn valid_combination_count(&self) -> u64 {
-        let spring_len = self.conditions.len();
-        let broken_len: usize = self.broken.len();
-        let total_broken: u32 = self.broken.iter().map(|&x| x as u32).sum();
-        let total_good = spring_len as u32 - total_broken;
-
-        let max_value = self.max_possible_good().min(total_good);
-        let mut min_values = vec![0];
-        min_values.resize(broken_len, 1);
-        min_values.push(0);
-
-        let mut current = min_values.clone();
-
-        self.new_combinations(&min_values, &mut current, 0, total_good, max_value)
-    }
-
-    fn new_combinations(
-        &self,
-        min_values: &Vec<u32>,
-        current: &mut Vec<u32>,
-        index: usize,
-        target_sum: u32,
-        max_value: u32,
-    ) -> u64 {
-        if index == current.len() {
-            return u64::from(
-                // bool as u64
-                current.iter().sum::<u32>() == target_sum,
-            );
-        }
-
-        let mut sum = 0;
-
-        let mut found_valid = false;
-
-        for value in min_values[index]..=max_value {
-            current[index] = value;
-            if !self.is_valid_comb(&current[..=index]) {
-                if found_valid {
-                    return sum;
-                } else {
-                    continue;
-                }
-            }
-            found_valid = true;
-            sum += self.new_combinations(min_values, current, index + 1, target_sum, max_value);
-        }
-
-        sum
-    }
 }
-
 fn main() {
     let my_input = read_file("my_input.txt");
 
