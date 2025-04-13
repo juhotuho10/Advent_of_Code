@@ -211,9 +211,7 @@ impl Spring {
     ) -> Option<u64> {
         //println!("{recursion_num} funcion call with {conditions:?} and {broken:?}",);
         match (conditions, broken) {
-            (_conditons_left, []) => {
-                unreachable!("should be checked before entering");
-            }
+            (_conditons_left, []) => None, // unreachable since this is checked before entering the function
             ([], _some_still_broken) => {
                 //println!("{recursion_num} empty!!");
                 None
