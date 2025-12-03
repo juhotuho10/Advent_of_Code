@@ -25,11 +25,11 @@ impl BatteryBank {
         let total_len = self.0.len();
         while num_count > 0 {
             let num_search_slice = &self.0[start_idx..(total_len - (num_count - 1) as usize)];
-            let max_num = num_search_slice.iter().max().unwrap();
             let (idx, max_val) = num_search_slice
                 .iter()
                 .enumerate()
-                .find(|(_, num)| *num == max_num)
+                .rev()
+                .max_by_key(|(_, num)| *num)
                 .unwrap();
 
             start_idx += idx + 1;
