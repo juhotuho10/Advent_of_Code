@@ -9,6 +9,7 @@ we now remove the rolls that we can reach and we need to recheck if we can reach
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 struct PaperGrid(Vec<Vec<bool>>);
 
@@ -35,33 +36,27 @@ impl PaperGrid {
         PaperGrid(grid)
     }
 
-    fn find_reachable(&self) -> Vec<(usize, usize)> {
+    fn find_reachable(&self, search_space: &Vec<(usize, usize)>) -> Vec<(usize, usize)> {
         let mut reachable = Vec::new();
 
-        for (y, y_vec) in self.0.iter().enumerate() {
-            for (x, x_paper) in y_vec.iter().enumerate() {
-                if !x_paper {
-                    continue;
-                }
-                let mut total_adjacent = 0;
-                for (y_diff, x_diff) in ADJACENT {
-                    let has_paper = match self
-                        .0
-                        .get((y as i32 + y_diff) as usize)
-                        .and_then(|row| row.get((x as i32 + x_diff) as usize))
-                    {
-                        Some(true) => 1,
-                        None | Some(false) => 0, // out of bounds or in bounds and doesnt have paper
-                    };
+        for (y, x) in search_space {
+            let total_adjacent = ADJACENT
+                .iter()
+                .filter(|(y_diff, x_diff)| {
+                    let new_y = (*y as i32 + y_diff) as usize;
+                    let new_x = (*x as i32 + x_diff) as usize;
+                    // the location is in the map and has paper
+                    Some(&true) == self.0.get(new_y).and_then(|row| row.get(new_x))
+                })
+                .count();
 
-                    total_adjacent += has_paper;
-                }
-
-                if total_adjacent < 4 {
-                    reachable.push((y, x));
-                }
+            if total_adjacent < 4 {
+                reachable.push((*y, *x));
             }
         }
+
+        reachable.sort();
+        reachable.dedup();
 
         reachable
     }
@@ -69,18 +64,39 @@ impl PaperGrid {
     fn find_and_remove(mut self) -> u32 {
         let mut reachable = 0;
 
-        loop {
-            let reached_papers = self.find_reachable();
+        let mut seach_papers = Vec::new();
 
-            let reached = reached_papers.len();
-            if reached == 0 {
+        for (y, y_vec) in self.0.iter().enumerate() {
+            for (x, x_paper) in y_vec.iter().enumerate() {
+                if *x_paper {
+                    seach_papers.push((y, x));
+                }
+            }
+        }
+
+        loop {
+            let reached_papers = self.find_reachable(&seach_papers);
+
+            if reached_papers.is_empty() {
                 break;
             }
 
-            reachable += reached;
+            reachable += reached_papers.len();
+
+            for (y, x) in &reached_papers {
+                self.0[*y][*x] = false;
+            }
+
+            seach_papers.clear();
 
             for (y, x) in reached_papers {
-                self.0[y][x] = false;
+                for (y_diff, x_diff) in ADJACENT {
+                    let new_y = (y as i32 + y_diff) as usize;
+                    let new_x = (x as i32 + x_diff) as usize;
+                    if let Some(true) = self.0.get(new_y).and_then(|row| row.get(new_x)) {
+                        seach_papers.push((new_y, new_x));
+                    };
+                }
             }
         }
 
@@ -115,14 +131,26 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, 43);
 
+    let start = Instant::now();
     let my_sum = solution_2(_my_input);
+    let dur = start.elapsed().as_micros();
+    println!("elapsed: {dur} micros");
     dbg!(my_sum);
 }
 
 fn solution_1(input: &[String]) -> u32 {
     let paper_grid = parse_input(input);
+    let mut seach_papers = Vec::new();
 
-    paper_grid.find_reachable().len() as u32
+    for (y, y_vec) in paper_grid.0.iter().enumerate() {
+        for (x, x_paper) in y_vec.iter().enumerate() {
+            if *x_paper {
+                seach_papers.push((y, x));
+            }
+        }
+    }
+
+    paper_grid.find_reachable(&seach_papers).len() as u32
 }
 
 fn solution_2(input: &[String]) -> u32 {
