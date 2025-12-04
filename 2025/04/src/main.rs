@@ -11,7 +11,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
-struct PaperGrid(Vec<Vec<bool>>);
+struct PaperGrid(Vec<bool>, usize);
 
 const ADJACENT: [(i32, i32); 8] = [
     (-1, -1),
@@ -26,32 +26,38 @@ const ADJACENT: [(i32, i32); 8] = [
 
 impl PaperGrid {
     fn new(input: &[String]) -> Self {
-        let mut grid = Vec::new();
-        for y in input {
-            {
-                let y_vec = y.chars().map(|c| c == '@').collect();
-                grid.push(y_vec);
-            }
-        }
-        PaperGrid(grid)
+        let len = input[0].len();
+
+        let grid = input
+            .iter()
+            .flat_map(|s| s.chars().map(|c| c == '@').collect::<Vec<bool>>())
+            .collect();
+
+        PaperGrid(grid, len)
     }
 
-    fn find_reachable(&self, search_space: &Vec<(usize, usize)>) -> Vec<(usize, usize)> {
+    fn find_reachable(&self, search_space: &Vec<usize>) -> Vec<usize> {
         let mut reachable = Vec::new();
 
-        for (y, x) in search_space {
+        let input_range = 0..self.1;
+        for index in search_space {
+            let y = index / self.1;
+            let x = index % self.1;
             let total_adjacent = ADJACENT
                 .iter()
                 .filter(|(y_diff, x_diff)| {
-                    let new_y = (*y as i32 + y_diff) as usize;
-                    let new_x = (*x as i32 + x_diff) as usize;
+                    let new_y = (y as i32 + y_diff) as usize;
+                    let new_x = (x as i32 + x_diff) as usize;
+                    let new_index = new_y * self.1 + new_x;
                     // the location is in the map and has paper
-                    Some(&true) == self.0.get(new_y).and_then(|row| row.get(new_x))
+                    input_range.contains(&new_y)
+                        && input_range.contains(&new_x)
+                        && self.0[new_index]
                 })
                 .count();
 
             if total_adjacent < 4 {
-                reachable.push((*y, *x));
+                reachable.push(*index);
             }
         }
 
@@ -63,14 +69,13 @@ impl PaperGrid {
 
     fn find_and_remove(mut self) -> u32 {
         let mut reachable = 0;
+        let input_range = 0..self.1;
 
         let mut seach_papers = Vec::new();
 
-        for (y, y_vec) in self.0.iter().enumerate() {
-            for (x, x_paper) in y_vec.iter().enumerate() {
-                if *x_paper {
-                    seach_papers.push((y, x));
-                }
+        for (i, paper) in self.0.iter().enumerate() {
+            if *paper {
+                seach_papers.push(i);
             }
         }
 
@@ -83,18 +88,25 @@ impl PaperGrid {
 
             reachable += reached_papers.len();
 
-            for (y, x) in &reached_papers {
-                self.0[*y][*x] = false;
+            for index in &reached_papers {
+                self.0[*index] = false;
             }
 
             seach_papers.clear();
 
-            for (y, x) in reached_papers {
+            for index in reached_papers {
+                let y = index / self.1;
+                let x = index % self.1;
+
                 for (y_diff, x_diff) in ADJACENT {
                     let new_y = (y as i32 + y_diff) as usize;
                     let new_x = (x as i32 + x_diff) as usize;
-                    if let Some(true) = self.0.get(new_y).and_then(|row| row.get(new_x)) {
-                        seach_papers.push((new_y, new_x));
+                    let new_index = new_y * self.1 + new_x;
+                    if input_range.contains(&new_y)
+                        && input_range.contains(&new_x)
+                        && self.0[new_index]
+                    {
+                        seach_papers.push(new_index);
                     };
                 }
             }
@@ -140,15 +152,13 @@ fn part_2(_my_input: &[String]) {
 
 fn solution_1(input: &[String]) -> u32 {
     let paper_grid = parse_input(input);
-    let mut seach_papers = Vec::new();
-
-    for (y, y_vec) in paper_grid.0.iter().enumerate() {
-        for (x, x_paper) in y_vec.iter().enumerate() {
-            if *x_paper {
-                seach_papers.push((y, x));
-            }
-        }
-    }
+    let seach_papers = paper_grid
+        .0
+        .iter()
+        .enumerate()
+        .filter(|(_, paper)| **paper)
+        .map(|(index, _)| index)
+        .collect();
 
     paper_grid.find_reachable(&seach_papers).len() as u32
 }
