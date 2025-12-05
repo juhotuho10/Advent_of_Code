@@ -7,8 +7,10 @@ we have to find the total number of fresh ids, the problem is that the ranges ca
 */
 #![feature(new_range_api)]
 #![feature(slice_split_once)]
+use std::arch::x86_64::_SIDD_CMP_EQUAL_ANY;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 struct FreshIDs(Vec<(u64, u64)>);
 impl FreshIDs {
     fn new(input: &[String]) -> Self {
@@ -80,11 +82,9 @@ impl FreshIDs {
         // repeat if changed
 
         let mut changed = true;
-        changed |= self.remove_self_contained();
+
         while changed {
             changed = false;
-            changed |= self.extend_start();
-            changed |= self.remove_self_contained();
             changed |= self.extend_end();
             changed |= self.remove_self_contained();
         }
@@ -123,7 +123,10 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, 14);
 
+    let start = Instant::now();
     let my_sum = solution_2(_my_input);
+    let elapsed = start.elapsed().as_micros();
+    println!("time taken: {elapsed}");
     dbg!(my_sum);
 }
 
