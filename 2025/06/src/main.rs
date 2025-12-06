@@ -10,12 +10,7 @@ we need to parse the problems differently, 1 column at a time
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-
-#[derive(Debug)]
-enum MathProblem {
-    Add(Vec<u16>),
-    Multiply(Vec<u16>),
-}
+use std::time::Instant;
 
 fn main() {
     let my_input = read_file("my_input.txt");
@@ -32,7 +27,10 @@ fn part_1(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, 4277556);
 
+    let start = Instant::now();
     let my_sum = solution_1(_my_input);
+    let elapsed = start.elapsed().as_micros();
+    println!("elapsed: {elapsed}");
     dbg!(my_sum);
 }
 
@@ -44,121 +42,111 @@ fn part_2(_my_input: &[String]) {
     dbg!(&example_sum);
     assert_eq!(example_sum, 3263827);
 
+    let start = Instant::now();
     let my_sum = solution_2(_my_input);
+    let elapsed = start.elapsed().as_micros();
+    println!("elapsed: {elapsed}");
     dbg!(my_sum);
 }
 
 fn solution_1(input: &[String]) -> u64 {
-    let math_problems = parse_input_1(input);
+    let math_nums = parse_input_1(input);
 
-    math_problems
-        .into_iter()
-        .map(|problem| match problem {
-            MathProblem::Add(items) => items.into_iter().map(|i| i as u64).sum::<u64>(),
-            MathProblem::Multiply(items) => items.into_iter().map(|i| i as u64).product(),
-        })
-        .sum()
+    math_nums.into_iter().sum()
 }
 
 fn solution_2(input: &[String]) -> u64 {
-    let math_problems = parse_input_2(input);
+    let math_nums = parse_input_2(input);
 
-    math_problems
-        .into_iter()
-        .map(|problem| match problem {
-            MathProblem::Add(items) => items.into_iter().map(|i| i as u64).sum::<u64>(),
-            MathProblem::Multiply(items) => items.into_iter().map(|i| i as u64).product(),
-        })
-        .sum()
+    math_nums.into_iter().sum()
 }
 
-fn parse_input_1(input: &[String]) -> Vec<MathProblem> {
+fn parse_input_1(input: &[String]) -> Vec<u64> {
     let mut rows = Vec::new();
     for row in input {
         let split_row: Vec<&str> = row.split(" ").filter(|r| !r.is_empty()).collect();
         rows.push(split_row);
     }
 
-    let row_len = rows[0].len();
+    let (operators, nums_rows) = rows.split_last().unwrap();
+
+    let row_len = nums_rows[0].len();
 
     let mut parsed = Vec::new();
 
     for i in 0..row_len {
         let mut nums = Vec::new();
-        for row in &rows {
+        for row in nums_rows {
             let chars = row[i];
-            match chars.parse::<u16>() {
-                Ok(num) => nums.push(num),
-                Err(_) => match chars {
-                    "*" => {
-                        parsed.push(MathProblem::Multiply(nums));
-                        break;
-                    }
-                    "+" => {
-                        parsed.push(MathProblem::Add(nums));
-                        break;
-                    }
-                    _ => unreachable!(),
-                },
+            nums.push(chars.parse::<u64>().unwrap());
+        }
+
+        match operators[i] {
+            "*" => {
+                parsed.push(nums.iter().product());
             }
+            "+" => {
+                parsed.push(nums.iter().sum());
+            }
+            _ => unreachable!(),
         }
     }
 
     parsed
 }
 
-fn parse_input_2(input: &[String]) -> Vec<MathProblem> {
-    let row_len = input[0].len();
+fn parse_input_2(input: &[String]) -> Vec<u64> {
+    let (operator_string, nums_rows) = input.split_last().unwrap();
+    let mut operator_iter = operator_string.chars().filter(|c| *c != ' ');
 
-    let mut math_problems = Vec::new();
-    let mut nums: Vec<u16> = Vec::new();
-    let mut operator: Option<char> = None;
+    let row_len = nums_rows[0].len();
 
-    for i in 0..row_len {
-        let row_chars: Vec<char> = input
-            .iter()
-            .map(|row| row.chars().nth(i).unwrap())
-            .filter(|c| *c != ' ')
+    let mut problem_nums = Vec::new();
+    let mut nums: Vec<u64> = Vec::new();
+    let mut row_chars: Vec<char>;
+
+    assert!(nums_rows.iter().all(|row| row.len() == row_len));
+
+    let mut row_iterators: Vec<_> = nums_rows.iter().map(|row| row.chars()).collect();
+
+    for _ in 0..row_len {
+        row_chars = row_iterators
+            .iter_mut()
+            .filter_map(|iter| {
+                let next = iter.next().unwrap();
+                if next == ' ' { None } else { Some(next) }
+            })
             .collect();
 
-        if row_chars.iter().all(|c| *c == ' ') {
-            match operator.unwrap() {
+        if row_chars.is_empty() {
+            match operator_iter.next().unwrap() {
                 '*' => {
-                    math_problems.push(MathProblem::Multiply(nums.clone()));
+                    problem_nums.push(nums.iter().product());
                 }
                 '+' => {
-                    math_problems.push(MathProblem::Add(nums.clone()));
+                    problem_nums.push(nums.iter().sum());
                 }
                 _ => unreachable!(),
             }
 
-            operator = None;
             nums.clear();
         } else {
-            let contains_op = row_chars.iter().any(|c| *c == '+' || *c == '*');
-            if contains_op {
-                let (op, num_chars) = row_chars.split_last().unwrap();
-                operator = Some(*op);
-                let num_str: String = num_chars.iter().cloned().collect();
-                nums.push(num_str.parse().unwrap());
-            } else {
-                let num_str: String = row_chars.iter().cloned().collect();
-                nums.push(num_str.parse().unwrap());
-            }
+            let num_str: String = row_chars.iter().cloned().collect();
+            nums.push(num_str.parse().unwrap());
         }
     }
 
-    match operator.unwrap() {
+    match operator_iter.next().unwrap() {
         '*' => {
-            math_problems.push(MathProblem::Multiply(nums.clone()));
+            problem_nums.push(nums.iter().product());
         }
         '+' => {
-            math_problems.push(MathProblem::Add(nums.clone()));
+            problem_nums.push(nums.iter().sum());
         }
         _ => unreachable!(),
     }
 
-    math_problems
+    problem_nums
 }
 
 fn read_file(file_name: &str) -> Vec<String> {
