@@ -9,9 +9,9 @@ use ahash::{AHashMap, AHashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-const SPLITTER: char = '^';
-const SPACE: char = '.';
-const START: char = 'S';
+const SPLITTER: u8 = b'^';
+const SPACE: u8 = b'.';
+const START: u8 = b'S';
 
 struct TachyonBeam<'a> {
     beam: AHashSet<usize>,
@@ -23,7 +23,7 @@ impl<'a> TachyonBeam<'a> {
         let (start_str, rest) = input.split_first().unwrap();
         let beam: AHashSet<usize> = start_str
             .char_indices()
-            .filter(|(_, c)| *c == START)
+            .filter(|(_, c)| *c as u8 == START)
             .map(|(i, _)| i)
             .collect();
         TachyonBeam { beam, map: rest }
@@ -35,7 +35,7 @@ impl<'a> TachyonBeam<'a> {
         let max_len = self.map[0].len();
         for row in self.map {
             for (i, char) in row.char_indices() {
-                if char == SPLITTER && self.beam.remove(&i) {
+                if char as u8 == SPLITTER && self.beam.remove(&i) {
                     split_count += 1;
                     let prev = i - 1;
                     let next = i + 1;
@@ -64,12 +64,12 @@ impl<'a> TachyonBeam<'a> {
             return *memo_result;
         }
 
-        let result = match map[0].chars().nth(beam) {
-            Some(SPLITTER) => {
+        let result = match map[0].as_bytes().get(beam) {
+            Some(&SPLITTER) => {
                 TachyonBeam::quantum_beam(memo, beam - 1, &map[1..])
                     + TachyonBeam::quantum_beam(memo, beam + 1, &map[1..])
             }
-            Some(SPACE) => TachyonBeam::quantum_beam(memo, beam, &map[1..]),
+            Some(&SPACE) => TachyonBeam::quantum_beam(memo, beam, &map[1..]),
             None => 0,
             _ => unreachable!(),
         };
