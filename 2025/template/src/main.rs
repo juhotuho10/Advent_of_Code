@@ -48,12 +48,12 @@ fn part_2(_my_input: &[String]) {
     dbg!(solution_2);
 }
 
-fn solution_1(input: &[String]) -> u32 {
+fn solution_1(input: &[String]) -> u64 {
     let parsed = parse_input(input);
     0
 }
 
-fn solution_2(input: &[String]) -> u32 {
+fn solution_2(input: &[String]) -> u64 {
     let parsed = parse_input(input);
     0
 }
