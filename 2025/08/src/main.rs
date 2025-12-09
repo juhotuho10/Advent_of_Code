@@ -226,12 +226,16 @@ fn solution_2(input: &[String]) -> u64 {
 
     // add chains together with a chain ID
     // if chains both have id, just mark the chains as connected
-    for n_connections in 0..box_distance.len() {
+    fn check_if_all_connected(
+        n_connections: usize,
+        n_boxes: usize,
+        box_distances: &[(BoxI, BoxI, u32)],
+    ) -> bool {
         let mut connected_chains: AHashSet<(BoxI, BoxI)> = AHashSet::with_capacity(512);
         let mut chain_lens: Vec<u16> = vec![0; n_boxes];
         let mut part_of_chain: Vec<Option<BoxI>> = vec![None; n_boxes];
 
-        for (box_i_1, box_i_2, _) in &box_distance[..n_connections] {
+        for (box_i_1, box_i_2, _) in &box_distances[..n_connections] {
             assert_ne!(box_i_1, box_i_2);
             let [chain_1, chain_2] = part_of_chain
                 .get_disjoint_mut([*box_i_1 as usize, *box_i_2 as usize])
@@ -310,16 +314,30 @@ fn solution_2(input: &[String]) -> u64 {
             chain_lens[*min_key as usize] = total;
         }
 
-        if *chain_lens.iter().max().unwrap() == n_boxes as u16 {
-            let (box_i_1, box_i_2, _) = box_distance[n_connections - 1];
+        *chain_lens.iter().max().unwrap() == n_boxes as u16
+    }
 
-            let box_1_x = boxes.x[box_i_1 as usize];
-            let box_2_x = boxes.x[box_i_2 as usize];
-            return box_1_x as u64 * box_2_x as u64;
+    // binary search for first occurence
+    let mut left = 0;
+    let mut right = box_distance.len();
+    let mut n_connections = None;
+
+    while left < right {
+        let mid = left + (right - left) / 2;
+
+        if check_if_all_connected(mid, n_boxes, &box_distance) {
+            n_connections = Some(mid);
+            right = mid;
+        } else {
+            left = mid + 1;
         }
     }
 
-    unreachable!()
+    let (box_i_1, box_i_2, _) = box_distance[n_connections.unwrap() - 1];
+
+    let box_1_x = boxes.x[box_i_1 as usize];
+    let box_2_x = boxes.x[box_i_2 as usize];
+    box_1_x as u64 * box_2_x as u64
 }
 
 fn parse_input(input: &[String]) -> BoxCoords {
