@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "Advent-of-Code-2025"
+version = "0.1.0"
+
+[dependencies]
+ahash = "0.8"
+nalgebra = "0.34.1"
+regex = "1.12"
+
