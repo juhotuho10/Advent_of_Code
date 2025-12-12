@@ -5,6 +5,7 @@ part 2:
 
 */
 
+#![allow(clippy::ptr_arg)]
 use std::{
     fs::File,
     io::{BufRead, BufReader},
