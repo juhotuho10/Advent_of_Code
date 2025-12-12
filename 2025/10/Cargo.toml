@@ -7,4 +7,5 @@ version = "0.1.0"
 ahash = "0.8"
 nalgebra = "0.34.1"
 regex = "1.12"
+itertools = "0.14.0"
 

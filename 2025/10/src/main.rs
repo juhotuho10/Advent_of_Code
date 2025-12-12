@@ -13,6 +13,7 @@ we have to find the fewest button presses to get to the wanted joltages for each
 */
 
 use ahash::AHashMap;
+use itertools::{Combinations, Itertools};
 use regex::Regex;
 use std::{
     fs::File,
@@ -26,7 +27,7 @@ struct MachineRequirements {
     lights_requirement: u16,
     wiring_bits: Vec<u16>,
     wiring_vec: Vec<Vec<u8>>,
-    wiring_vec_index: Vec<Vec<f32>>,
+    wiring_vec_index: Vec<Vec<bool>>,
     joltage_requirements: Vec<u16>,
 }
 
@@ -83,9 +84,9 @@ impl MachineRequirements {
         let mut button_vecs_index = Vec::new();
 
         for btn_vec in &button_vecs {
-            let mut empty: Vec<f32> = joltages.iter().map(|_| 0.0).collect();
+            let mut empty: Vec<bool> = joltages.iter().map(|_| false).collect();
             for i in btn_vec {
-                empty[*i as usize] = 1.0;
+                empty[*i as usize] = true;
             }
             button_vecs_index.push(empty);
         }
@@ -146,26 +147,78 @@ impl MachineRequirements {
 
     fn solve_joltages(self) -> u16 {
         let mut current_joltages: Vec<u16> = self.joltage_requirements.iter().map(|_| 0).collect();
-        //dbg!(self.least_sqaure_joltages());
+        dbg!(self.least_sqaure_joltages());
 
-        self.joltages_recursive(&self.wiring_vec, &mut current_joltages, 0)
-            .unwrap()
+        //self.joltages_recursive(&self.wiring_vec, &mut current_joltages, 0)
+        //    .unwrap()
+        11
     }
 
     fn least_sqaure_joltages(&self) -> Option<u16> {
-        let n_joltages = self.joltage_requirements.len();
-        let n_pats = self.wiring_vec_index.len();
-        let mut flat_paths: Vec<f32> = Vec::new();
+        // todo: remove all paths that are just combinations of other paths and
+        // add them back at the end by subtracting the sub parts to become the combination
+        let mut dedup_wirings: Vec<Vec<bool>> = Vec::new();
+        let mut copy_wires: Vec<(usize, Vec<usize>)> = Vec::new();
 
-        for i in 0..self.wiring_vec_index[0].len() {
-            for row in &self.wiring_vec_index {
-                flat_paths.push(row[i]);
+        for i in 0..self.wiring_vec_index.len() {
+            let mut wiring_i: Vec<usize> = (0..self.wiring_vec_index.len()).collect();
+            let current_i = wiring_i.remove(i);
+            let current_wire = &self.wiring_vec_index[current_i];
+            let mut is_duplicate = false;
+            for n_comb in 2..wiring_i.len() {
+                if is_duplicate {
+                    break;
+                }
+                for comb in wiring_i.iter().combinations(n_comb) {
+                    if is_duplicate {
+                        break;
+                    }
+                    let comb_vecs: Vec<&Vec<bool>> =
+                        comb.iter().map(|i| &self.wiring_vec_index[**i]).collect();
+                    let comb_true_count = comb_vecs
+                        .iter()
+                        .flat_map(|vec| vec.iter())
+                        .filter(|bool| **bool)
+                        .count();
+                    let current_true_count = current_wire.iter().filter(|bool| **bool).count();
+                    if comb_true_count != current_true_count {
+                        continue;
+                    }
+
+                    let mut combined: Vec<bool> = current_wire.iter().map(|_| false).collect();
+                    for current_comb in comb_vecs {
+                        for (i, b) in current_comb.iter().enumerate() {
+                            if *b {
+                                combined[i] = true;
+                            }
+                        }
+                    }
+
+                    if combined == *current_wire {
+                        is_duplicate = true;
+                        copy_wires.push((current_i, comb.into_iter().copied().collect()));
+                    }
+                }
+            }
+
+            if !is_duplicate {
+                dedup_wirings.push(current_wire.clone());
             }
         }
 
-        //dbg!(&flat_paths);
+        //dbg!(&dedup_wirings);
+        dbg!(&!copy_wires.is_empty());
 
-        let paths_array = DMatrix::from_row_slice(n_joltages, n_pats, &flat_paths);
+        let n_joltages = self.joltage_requirements.len();
+        let n_pats = dedup_wirings.len();
+
+        let flat_wirings: Vec<f32> = dedup_wirings
+            .iter()
+            .flatten()
+            .copied()
+            .map(|b| if b { 1.0 } else { 0.0 })
+            .collect();
+        let paths_array = DMatrix::from_row_slice(n_pats, n_joltages, &flat_wirings).transpose();
         let joltages_array = DVector::from_row_slice(&self.joltage_requirements).map(|x| x as f32);
 
         MachineRequirements::least_squares(paths_array, joltages_array)
